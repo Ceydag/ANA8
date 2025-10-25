@@ -1,12 +1,15 @@
 import re
 from validation import *
+from system_logging import log_validation_failure, log_all_validation_attempts
 
-def get_validated_input(prompt, validation_func, error_message, max_attempts=3):
+def get_validated_input(prompt, validation_func, error_message, max_attempts=3, username="unknown", field_name="unknown"):
+    # REQUIREMENT: Invalid input logging - log all validation attempts
     attempts = 0
     while attempts < max_attempts:
         user_input = input(prompt).strip()
         
         if not user_input:
+            log_validation_failure(username, field_name, user_input, "Empty input")
             print("Input cannot be empty. Please try again.")
             attempts += 1
             continue
@@ -16,11 +19,15 @@ def get_validated_input(prompt, validation_func, error_message, max_attempts=3):
         if is_valid:
             return user_input
         else:
+            # Log the validation failure
+            log_validation_failure(username, field_name, user_input, message)
             print(f"{message}")
             if attempts < max_attempts - 1:
                 print(f"{error_message}")
             attempts += 1
     
+    # Log max attempts exceeded
+    log_all_validation_attempts(username, field_name, user_input, False, f"Max attempts ({max_attempts}) exceeded")
     print(f"Maximum attempts ({max_attempts}) exceeded. Skipping this field.")
     return None
 
@@ -63,15 +70,15 @@ def validate_maintenance_date_input(date_str):
 def get_first_name():
     return get_validated_input(
         "Enter first name: ",
-        lambda x: (True, "") if x.strip() else (False, "First name cannot be empty"),
-        "First name is required"
+        validate_first_name,
+        "First name must be 2-50 characters with letters, spaces, apostrophes, and hyphens only"
     )
 
 def get_last_name():
     return get_validated_input(
         "Enter last name: ",
-        lambda x: (True, "") if x.strip() else (False, "Last name cannot be empty"),
-        "Last name is required"
+        validate_last_name,
+        "Last name must be 2-50 characters with letters, spaces, apostrophes, and hyphens only"
     )
 
 def get_username():
@@ -206,24 +213,7 @@ def get_numeric_input(prompt, min_val=None, max_val=None, field_name="value"):
             return None
 
 
-def validate_serial_number_input(serial_number):
-    if not serial_number:
-        return False, "Serial number cannot be empty"
-    
-    if len(serial_number) < 10 or len(serial_number) > 17:
-        return False, "Serial number must be 10-17 characters long"
-    
-    if not re.match(r'^[A-Za-z0-9]+$', serial_number):
-        return False, "Serial number must contain only letters and numbers"
-    
-    return True, "Valid serial number"
-
-def get_serial_number():
-    return get_validated_input(
-        "Enter serial number (10-17 alphanumeric characters): ",
-        validate_serial_number_input,
-        "Serial number must be 10-17 alphanumeric characters (e.g., SG1234567890)."
-    )
+# Removed duplicate functions - using the ones from validation.py
 
 def validate_brand_input(brand):
     if not brand:
@@ -240,7 +230,7 @@ def validate_brand_input(brand):
 def get_brand():
     return get_validated_input(
         "Enter brand (e.g., Segway, NIU): ",
-        validate_brand_input,
+        validate_brand,
         "Brand must be 2-50 characters with letters, numbers, spaces, hyphens, and dots only."
     )
 
@@ -259,7 +249,7 @@ def validate_model_input(model):
 def get_model():
     return get_validated_input(
         "Enter model (e.g., Ninebot E25, N1S Pro): ",
-        validate_model_input,
+        validate_model,
         "Model must be 2-50 characters with letters, numbers, spaces, hyphens, and dots only."
     )
 

@@ -10,7 +10,7 @@ from encryption import encrypt_data, decrypt_data
 def initialize_db():
     """Initialize the SQLite database with required tables"""
   
-    db_path = 'urban_mobility.db'
+    db_path = 'src/urban_mobility.db'
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -32,7 +32,6 @@ def initialize_db():
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Travellers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_id TEXT UNIQUE NOT NULL,
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         birthday TEXT NOT NULL,
@@ -100,7 +99,16 @@ def initialize_db():
 def get_connection():
     """Get database connection with timeout and better error handling"""
     try:
-        conn = sqlite3.connect('urban_mobility.db', timeout=30.0)
+        # Check if database exists in src directory, otherwise look in current directory
+        import os
+        if os.path.exists('src/urban_mobility.db'):
+            db_path = 'src/urban_mobility.db'
+        elif os.path.exists('urban_mobility.db'):
+            db_path = 'urban_mobility.db'
+        else:
+            db_path = 'src/urban_mobility.db'  # Default to src directory
+        
+        conn = sqlite3.connect(db_path, timeout=30.0)
         conn.execute('PRAGMA busy_timeout=30000')
         return conn
     except sqlite3.OperationalError as e:

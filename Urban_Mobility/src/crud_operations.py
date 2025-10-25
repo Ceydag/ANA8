@@ -14,6 +14,7 @@ def create_user(user_data, current_user):
             
         cursor = conn.cursor()
 
+        encrypted_username = encrypt_data(user_data['username'])
         encrypted_first_name = encrypt_data(user_data['first_name'])
         encrypted_last_name = encrypt_data(user_data['last_name'])
         
@@ -22,7 +23,7 @@ def create_user(user_data, current_user):
             INSERT INTO Users (username, password_hash, first_name, last_name, role, registration_date)
             VALUES (?, ?, ?, ?, ?, datetime('now'))
         ''', (
-            user_data['username'],
+            encrypted_username,
             user_data['password_hash'],
             encrypted_first_name,
             encrypted_last_name,
@@ -58,7 +59,7 @@ def update_user(username, update_data, current_user):
         conn = get_connection()
         cursor = conn.cursor()
 
-        encrypted_fields = ['first_name', 'last_name']
+        encrypted_fields = ['username', 'first_name', 'last_name']
         set_clauses = []
         values = []
         
@@ -134,18 +135,348 @@ def list_users(current_user):
         
         for username, first_name, last_name, role, reg_date in users:
             try:
+                decrypted_username = decrypt_data(username)
                 decrypted_first = decrypt_data(first_name)
                 decrypted_last = decrypt_data(last_name)
                 full_name = f"{decrypted_first} {decrypted_last}"
             except:
+                decrypted_username = username
                 full_name = f"{first_name} {last_name}"
             
-            print(f"{username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
+            print(f"{decrypted_username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
         
         close_connection(conn)
         
     except Exception as e:
         print(f"Error listing users: {e}")
+
+def list_system_admins(current_user):
+    """List only System Administrators with ID"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, username, first_name, last_name, role, registration_date
+            FROM Users
+            WHERE role = 'System Admin' AND username != 'super_admin'
+            ORDER BY registration_date DESC
+        ''')
+        
+        users = cursor.fetchall()
+        
+        if not users:
+            print("📋 No System Administrators found in the system.")
+            print("⚠️  Note: Super Admin account is protected and not shown in this list.")
+            return
+        
+        print("\n" + "=" * 90)
+        print("    SYSTEM ADMINISTRATORS LIST")
+        print("=" * 90)
+        print(f"{'ID':<5} {'Username':<15} {'Name':<25} {'Role':<15} {'Registered':<20}")
+        print("-" * 90)
+        
+        for user_id, username, first_name, last_name, role, reg_date in users:
+            try:
+                decrypted_username = decrypt_data(username)
+                decrypted_first = decrypt_data(first_name)
+                decrypted_last = decrypt_data(last_name)
+                full_name = f"{decrypted_first} {decrypted_last}"
+            except:
+                decrypted_username = username
+                full_name = f"{first_name} {last_name}"
+            
+            print(f"{user_id:<5} {decrypted_username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
+        
+        close_connection(conn)
+        
+    except Exception as e:
+        print(f"Error listing system administrators: {e}")
+
+def list_service_engineers(current_user):
+    """List only Service Engineers with ID"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, username, first_name, last_name, role, registration_date
+            FROM Users
+            WHERE role = 'Service Engineer'
+            ORDER BY registration_date DESC
+        ''')
+        
+        users = cursor.fetchall()
+        
+        if not users:
+            print("📋 No Service Engineers found in the system.")
+            return
+        
+        print("\n" + "=" * 90)
+        print("    SERVICE ENGINEERS LIST")
+        print("=" * 90)
+        print(f"{'ID':<5} {'Username':<15} {'Name':<25} {'Role':<15} {'Registered':<20}")
+        print("-" * 90)
+        
+        for user_id, username, first_name, last_name, role, reg_date in users:
+            try:
+                decrypted_username = decrypt_data(username)
+                decrypted_first = decrypt_data(first_name)
+                decrypted_last = decrypt_data(last_name)
+                full_name = f"{decrypted_first} {decrypted_last}"
+            except:
+                decrypted_username = username
+                full_name = f"{first_name} {last_name}"
+            
+            print(f"{user_id:<5} {decrypted_username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
+        
+        close_connection(conn)
+        
+    except Exception as e:
+        print(f"Error listing service engineers: {e}")
+
+def delete_user_by_id(user_id, current_user, allowed_role=None):
+    """Delete user by ID with security restrictions"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # First get user info for security checks
+        cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
+        user_info = cursor.fetchone()
+        
+        if not user_info:
+            print(f"No user found with ID {user_id}")
+            return False
+        
+        username, role = user_info
+        
+        # SECURITY CHECKS
+        
+        # 1. Never allow deletion of super_admin
+        if username == 'super_admin':
+            print("❌ ERROR: Cannot delete super_admin account!")
+            log_action(current_user, f"Attempted to delete super_admin - BLOCKED")
+            return False
+        
+        # 2. Check if current user can delete this role
+        if allowed_role and role != allowed_role:
+            # Decrypt username for better error message
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            print(f"❌ ERROR: User ID {user_id} is a {role}, but you can only delete {allowed_role} users!")
+            print(f"   User: {decrypted_username}")
+            log_action(current_user, f"Attempted to delete {role} user {decrypted_username} - BLOCKED (wrong role)")
+            return False
+        
+        # 3. Additional security: Prevent deletion of other System Admins by System Admins
+        if current_user != 'super_admin' and role == 'System Admin':
+            # Decrypt username for better error message
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            print("❌ ERROR: Only Super Admin can delete System Administrators!")
+            print(f"   User: {decrypted_username}")
+            log_action(current_user, f"Attempted to delete System Admin {decrypted_username} - BLOCKED (insufficient privileges)")
+            return False
+        
+        # Delete the user
+        cursor.execute('DELETE FROM Users WHERE id = ?', (user_id,))
+        
+        if cursor.rowcount > 0:
+            # Decrypt username for success message and logging
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            conn.commit()
+            log_action(current_user, f"Deleted {role} user: {decrypted_username}")
+            print(f"✅ User {decrypted_username} ({role}) deleted successfully!")
+            return True
+        else:
+            print(f"Failed to delete user with ID {user_id}")
+            return False
+            
+    except Exception as e:
+        print(f"Error deleting user: {e}")
+        return False
+    finally:
+        close_connection(conn)
+
+def validate_user_exists_with_role(user_id, required_role):
+    """Validate that a user exists with the specified ID and role"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Check if user exists with the specific role
+        cursor.execute('SELECT username, role FROM Users WHERE id = ? AND role = ?', (user_id, required_role))
+        user_info = cursor.fetchone()
+        
+        if not user_info:
+            # Check if user exists at all
+            cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
+            user_exists = cursor.fetchone()
+            
+            if not user_exists:
+                print(f"❌ ERROR: No user found with ID {user_id}")
+                print(f"   Please select a valid ID from the list above.")
+                return False, None, None
+            else:
+                # User exists but wrong role
+                existing_username, existing_role = user_exists
+                try:
+                    decrypted_username = decrypt_data(existing_username)
+                except:
+                    decrypted_username = existing_username
+                
+                print(f"❌ ERROR: User ID {user_id} exists but is a {existing_role}, not a {required_role}!")
+                print(f"   User: {decrypted_username}")
+                print(f"   This menu can only update {required_role} users.")
+                return False, None, None
+        
+        username, role = user_info
+        return True, username, role
+        
+    except Exception as e:
+        print(f"Error validating user: {e}")
+        return False, None, None
+    finally:
+        close_connection(conn)
+
+def update_user_by_id(user_id, update_data, current_user, allowed_role=None):
+    """Update user by ID with security restrictions"""
+    conn = None
+    try:
+        # First validate that user exists with correct role
+        if allowed_role:
+            is_valid, username, role = validate_user_exists_with_role(user_id, allowed_role)
+            if not is_valid:
+                return False
+        else:
+            # For cases without role restriction, just check if user exists
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
+            user_info = cursor.fetchone()
+            
+            if not user_info:
+                print(f"❌ ERROR: No user found with ID {user_id}")
+                print(f"   Please select a valid ID from the list above.")
+                return False
+            
+            username, role = user_info
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # SECURITY CHECKS
+        
+        # 1. Never allow updating super_admin
+        if username == 'super_admin':
+            print("❌ ERROR: Cannot update super_admin account!")
+            log_action(current_user, f"Attempted to update super_admin - BLOCKED")
+            return False
+        
+        # 2. Check if current user can update this role
+        if allowed_role and role != allowed_role:
+            # Decrypt username for better error message
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            print(f"❌ ERROR: User ID {user_id} is a {role}, but you can only update {allowed_role} users!")
+            print(f"   User: {decrypted_username}")
+            log_action(current_user, f"Attempted to update {role} user {decrypted_username} - BLOCKED (wrong role)")
+            return False
+        
+        # 2.5. Additional check: Ensure the user is actually in the allowed role list
+        if allowed_role == "System Admin" and role != "System Admin":
+            # Decrypt username for better error message
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            print(f"❌ ERROR: User ID {user_id} is not a System Administrator!")
+            print(f"   User: {decrypted_username} ({role})")
+            print(f"   Please select a System Administrator from the list above.")
+            log_action(current_user, f"Attempted to update non-System Admin user {decrypted_username} (ID {user_id}) - BLOCKED")
+            return False
+        
+        if allowed_role == "Service Engineer" and role != "Service Engineer":
+            # Decrypt username for better error message
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            print(f"❌ ERROR: User ID {user_id} is not a Service Engineer!")
+            print(f"   User: {decrypted_username} ({role})")
+            print(f"   Please select a Service Engineer from the list above.")
+            log_action(current_user, f"Attempted to update non-Service Engineer user {decrypted_username} (ID {user_id}) - BLOCKED")
+            return False
+        
+        # 3. Additional security: Prevent updating other System Admins by System Admins
+        if current_user != 'super_admin' and role == 'System Admin':
+            # Decrypt username for better error message
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            print("❌ ERROR: Only Super Admin can update System Administrators!")
+            print(f"   User: {decrypted_username}")
+            log_action(current_user, f"Attempted to update System Admin {decrypted_username} - BLOCKED (insufficient privileges)")
+            return False
+        
+        # Encrypt fields that need encryption
+        encrypted_fields = ['username', 'first_name', 'last_name']
+        for field in encrypted_fields:
+            if field in update_data:
+                update_data[field] = encrypt_data(update_data[field])
+        
+        # Build update query
+        set_clauses = []
+        values = []
+        
+        for field, value in update_data.items():
+            set_clauses.append(f"{field} = ?")
+            values.append(value)
+        
+        values.append(user_id)
+        
+        query = f"UPDATE Users SET {', '.join(set_clauses)} WHERE id = ?"
+        cursor.execute(query, values)
+        
+        if cursor.rowcount > 0:
+            conn.commit()
+            # Decrypt username for logging
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            updated_fields = ', '.join(update_data.keys())
+            log_action(current_user, f"Updated {role} user {decrypted_username}: {updated_fields}")
+            print(f"✅ User {decrypted_username} ({role}) updated successfully!")
+            return True
+        else:
+            print(f"Failed to update user with ID {user_id}")
+            return False
+            
+    except Exception as e:
+        print(f"Error updating user: {e}")
+        return False
+    finally:
+        close_connection(conn)
 
 def update_user_password(username, new_password_hash, current_user):
     try:
@@ -196,34 +527,35 @@ def create_traveller(traveller_data):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-     
-        import uuid
-        customer_id = str(uuid.uuid4())[:8] + '-' + str(uuid.uuid4())[:1]
         
         encrypted_first_name = encrypt_data(traveller_data['first_name'])
         encrypted_last_name = encrypt_data(traveller_data['last_name'])
         encrypted_email = encrypt_data(traveller_data['email'])
         encrypted_phone = encrypt_data(traveller_data['mobile_phone'])
+        encrypted_street = encrypt_data(traveller_data['street_name'])
+        encrypted_house = encrypt_data(traveller_data['house_number'])
+        encrypted_zip = encrypt_data(traveller_data['zip_code'])
+        encrypted_city = encrypt_data(traveller_data['city'])
+        encrypted_license = encrypt_data(traveller_data['driving_license'])
 
         cursor.execute('''
             INSERT INTO Travellers (
-                customer_id, first_name, last_name, birthday, gender, street_name, house_number,
+                first_name, last_name, birthday, gender, street_name, house_number,
                 zip_code, city, email, mobile_phone, driving_license, registration_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ''', (
-            customer_id,
             encrypted_first_name,
             encrypted_last_name,
             traveller_data['birthday'],
             traveller_data['gender'],
-            traveller_data['street_name'],
-            traveller_data['house_number'],
-            traveller_data['zip_code'],
-            traveller_data['city'],
+            encrypted_street,
+            encrypted_house,
+            encrypted_zip,
+            encrypted_city,
             encrypted_email,
             encrypted_phone,
-            traveller_data['driving_license']
+            encrypted_license
         ))
         
         conn.commit()
@@ -242,7 +574,8 @@ def list_travellers():
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT customer_id, first_name, last_name, email, mobile_phone, registration_date
+            SELECT id, first_name, last_name, email, mobile_phone, street_name, house_number, 
+                   zip_code, city, driving_license, registration_date
             FROM Travellers
             ORDER BY registration_date DESC
         ''')
@@ -253,38 +586,46 @@ def list_travellers():
             print("📋 No travellers found in the system.")
             return
         
-        print("\n" + "=" * 100)
+        print("\n" + "=" * 120)
         print("    TRAVELLER LIST")
-        print("=" * 100)
-        print(f"{'Customer ID':<15} {'Name':<25} {'Email':<30} {'Phone':<15} {'Registered':<20}")
-        print("-" * 100)
+        print("=" * 120)
+        print(f"{'ID':<5} {'Name':<25} {'Email':<25} {'Phone':<15} {'Address':<30} {'License':<15} {'Registered':<20}")
+        print("-" * 120)
         
-        for customer_id, first_name, last_name, email, phone, reg_date in travellers:
+        for traveller_id, first_name, last_name, email, phone, street, house, zip_code, city, license, reg_date in travellers:
             try:
                 decrypted_first = decrypt_data(first_name)
                 decrypted_last = decrypt_data(last_name)
                 decrypted_email = decrypt_data(email)
                 decrypted_phone = decrypt_data(phone)
+                decrypted_street = decrypt_data(street)
+                decrypted_house = decrypt_data(house)
+                decrypted_zip = decrypt_data(zip_code)
+                decrypted_city = decrypt_data(city)
+                decrypted_license = decrypt_data(license)
                 
                 full_name = f"{decrypted_first} {decrypted_last}"
+                address = f"{decrypted_street} {decrypted_house}, {decrypted_zip} {decrypted_city}"
             except:
                 full_name = f"{first_name} {last_name}"
                 decrypted_email = email
                 decrypted_phone = phone
+                address = f"{street} {house}, {zip_code} {city}"
+                decrypted_license = license
             
-            print(f"{customer_id:<15} {full_name:<25} {decrypted_email:<30} {decrypted_phone:<15} {reg_date:<20}")
+            print(f"{traveller_id:<5} {full_name:<25} {decrypted_email:<25} {decrypted_phone:<15} {address:<30} {decrypted_license:<15} {reg_date:<20}")
         
         close_connection(conn)
         
     except Exception as e:
         print(f"Error listing travellers: {e}")
 
-def search_traveller_id(customer_id):
+def search_traveller_by_id(traveller_id):
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT customer_id FROM Travellers WHERE customer_id = ?', (customer_id,))
+        cursor.execute('SELECT id FROM Travellers WHERE id = ?', (traveller_id,))
         traveller = cursor.fetchone()
         close_connection(conn)
         return traveller
@@ -299,7 +640,8 @@ def search_travellers(search_term):
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT customer_id, first_name, last_name, email, mobile_phone, registration_date
+            SELECT id, first_name, last_name, email, mobile_phone, street_name, house_number,
+                   zip_code, city, driving_license, registration_date
             FROM Travellers
         ''')
         
@@ -309,10 +651,10 @@ def search_travellers(search_term):
         print(f"Searching for: '{search_term}'")
         print(f"Checking {len(all_travellers)} travellers...")
         
-        for customer_id, first_name, last_name, email, phone, reg_date in all_travellers:
+        for traveller_id, first_name, last_name, email, phone, street, house, zip_code, city, license, reg_date in all_travellers:
             match_found = False
             
-            if search_term.lower() in str(customer_id).lower():
+            if search_term.lower() in str(traveller_id).lower():
                 match_found = True
             
             try:
@@ -320,6 +662,11 @@ def search_travellers(search_term):
                 decrypted_last = decrypt_data(last_name)
                 decrypted_email = decrypt_data(email)
                 decrypted_phone = decrypt_data(phone)
+                decrypted_street = decrypt_data(street)
+                decrypted_house = decrypt_data(house)
+                decrypted_zip = decrypt_data(zip_code)
+                decrypted_city = decrypt_data(city)
+                decrypted_license = decrypt_data(license)
 
                 search_lower = search_term.lower()
             
@@ -344,16 +691,36 @@ def search_travellers(search_term):
                     match_found = True
                     print(f"Found match in email: {decrypted_email}")
                 
-       
                 if (decrypted_phone and 
                     decrypted_phone != phone and 
                     len(decrypted_phone) < 20 and
                     search_lower in decrypted_phone.lower()):
                     match_found = True
                     print(f"Found match in phone: {decrypted_phone}")
+                
+                if (decrypted_street and 
+                    decrypted_street != street and 
+                    len(decrypted_street) < 50 and
+                    search_lower in decrypted_street.lower()):
+                    match_found = True
+                    print(f"Found match in street: {decrypted_street}")
+                
+                if (decrypted_city and 
+                    decrypted_city != city and 
+                    len(decrypted_city) < 50 and
+                    search_lower in decrypted_city.lower()):
+                    match_found = True
+                    print(f"Found match in city: {decrypted_city}")
+                
+                if (decrypted_license and 
+                    decrypted_license != license and 
+                    len(decrypted_license) < 20 and
+                    search_lower in decrypted_license.lower()):
+                    match_found = True
+                    print(f"Found match in license: {decrypted_license}")
                         
             except Exception as e:
-                print(f"Decryption error for traveller {customer_id}: {e}")
+                print(f"Decryption error for traveller {traveller_id}: {e}")
                 continue
   
             if match_found:
@@ -369,7 +736,7 @@ def search_travellers(search_term):
                     display_phone = "Encrypted"
                 
                 matching_travellers.append((
-                    customer_id, display_first, display_last, 
+                    traveller_id, display_first, display_last, 
                     display_email, display_phone, reg_date
                 ))
 
@@ -378,38 +745,47 @@ def search_travellers(search_term):
             print("=" * 100)
             print(f"    SEARCH RESULTS FOR '{search_term}'")
             print("=" * 100)
-            print(f"{'Customer ID':<15} {'Name':<25} {'Email':<30} {'Phone':<15} {'Registered':<20}")
+            print(f"{'ID':<5} {'Name':<25} {'Email':<30} {'Phone':<15} {'Registered':<20}")
             print("-" * 100)
             
-            for customer_id, first_name, last_name, email, phone, reg_date in matching_travellers:
+            for traveller_id, first_name, last_name, email, phone, reg_date in matching_travellers:
                 full_name = f"{first_name} {last_name}"
-                print(f"{customer_id:<15} {full_name:<25} {email:<30} {phone:<15} {reg_date:<20}")
+                print(f"{traveller_id:<5} {full_name:<25} {email:<30} {phone:<15} {reg_date:<20}")
         else:
             print(f"No travellers found matching '{search_term}'")
             print("\n Try searching with:")
-            print("   - Customer ID (partial or full)")
+            print("   - Traveller ID (partial or full)")
             print("   - First or last name")
             print("   - Email address")
             print("   - Phone number")
+            print("   - Street name or city")
+            print("   - Driving license number")
         
         close_connection(conn)
         
     except Exception as e:
         print(f"Error searching travellers: {e}")
 
-def update_traveller(customer_id, update_data):
+def update_traveller(traveller_id, update_data):
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        
+        # First validate that traveller exists
+        cursor.execute('SELECT id FROM Travellers WHERE id = ?', (traveller_id,))
+        traveller_exists = cursor.fetchone()
+        
+        if not traveller_exists:
+            print(f"❌ ERROR: No traveller found with ID {traveller_id}")
+            print(f"   Please select a valid traveller ID from the list above.")
+            return False
 
-        if 'first_name' in update_data:
-            update_data['first_name'] = encrypt_data(update_data['first_name'])
-        if 'last_name' in update_data:
-            update_data['last_name'] = encrypt_data(update_data['last_name'])
-        if 'email' in update_data:
-            update_data['email'] = encrypt_data(update_data['email'])
-        if 'mobile_phone' in update_data:
-            update_data['mobile_phone'] = encrypt_data(update_data['mobile_phone'])
+        encrypted_fields = ['first_name', 'last_name', 'email', 'mobile_phone', 
+                           'street_name', 'house_number', 'zip_code', 'city', 'driving_license']
+        
+        for field in encrypted_fields:
+            if field in update_data:
+                update_data[field] = encrypt_data(update_data[field])
 
         set_clauses = []
         values = []
@@ -418,9 +794,9 @@ def update_traveller(customer_id, update_data):
             set_clauses.append(f"{field} = ?")
             values.append(value)
         
-        values.append(customer_id)
+        values.append(traveller_id)
         
-        query = f"UPDATE Travellers SET {', '.join(set_clauses)} WHERE customer_id = ?"
+        query = f"UPDATE Travellers SET {', '.join(set_clauses)} WHERE id = ?"
         cursor.execute(query, values)
         
         if cursor.rowcount > 0:
@@ -435,7 +811,7 @@ def update_traveller(customer_id, update_data):
         print(f"Error updating traveller: {e}")
         return False
 
-def delete_traveller(customer_id):
+def delete_traveller(traveller_id):
     conn = None
     try:
         conn = get_connection()
@@ -445,19 +821,19 @@ def delete_traveller(customer_id):
             
         cursor = conn.cursor()
         
-        cursor.execute('SELECT customer_id FROM Travellers WHERE customer_id = ?', (customer_id,))
+        cursor.execute('SELECT id FROM Travellers WHERE id = ?', (traveller_id,))
         if not cursor.fetchone():
-            print(f"Traveller with customer ID '{customer_id}' not found")
+            print(f"Traveller with ID '{traveller_id}' not found")
             return False
         
-        cursor.execute('DELETE FROM Travellers WHERE customer_id = ?', (customer_id,))
+        cursor.execute('DELETE FROM Travellers WHERE id = ?', (traveller_id,))
         
         if cursor.rowcount > 0:
             conn.commit()
-            print(f"Traveller with customer ID '{customer_id}' deleted successfully")
+            print(f"Traveller with ID '{traveller_id}' deleted successfully")
             return True
         else:
-            print(f"No traveller found with customer ID '{customer_id}'")
+            print(f"No traveller found with ID '{traveller_id}'")
             return False
             
     except sqlite3.OperationalError as e:
@@ -486,6 +862,8 @@ def create_scooter(scooter_data):
         encrypted_brand = encrypt_data(scooter_data['brand'])
         encrypted_model = encrypt_data(scooter_data['model'])
         encrypted_serial = encrypt_data(scooter_data['serial_number'])
+        encrypted_latitude = encrypt_data(str(scooter_data['latitude']))
+        encrypted_longitude = encrypt_data(str(scooter_data['longitude']))
         
         cursor.execute('''
             INSERT INTO Scooters (
@@ -503,8 +881,8 @@ def create_scooter(scooter_data):
             scooter_data['state_of_charge'],
             scooter_data['target_range_min'],
             scooter_data['target_range_max'],
-            scooter_data['latitude'],
-            scooter_data['longitude'],
+            encrypted_latitude,
+            encrypted_longitude,
             scooter_data['out_of_service'],
             scooter_data['mileage'],
             scooter_data['last_maintenance_date']
@@ -524,7 +902,8 @@ def list_scooters():
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, brand, model, serial_number, state_of_charge, out_of_service, in_service_date
+            SELECT id, brand, model, serial_number, state_of_charge, out_of_service, 
+                   latitude, longitude, in_service_date
             FROM Scooters
             ORDER BY in_service_date DESC
         ''')
@@ -535,29 +914,33 @@ def list_scooters():
             print("No scooters found in the system.")
             return
         
-        print("\n" + "=" * 100)
+        print("\n" + "=" * 120)
         print("    SCOOTER LIST")
-        print("=" * 100)
-        print(f"{'ID':<5} {'Brand':<15} {'Model':<20} {'Serial':<15} {'SoC':<5} {'Status':<12} {'In Service':<20}")
-        print("-" * 100)
+        print("=" * 120)
+        print(f"{'ID':<5} {'Brand':<15} {'Model':<20} {'Serial':<15} {'SoC':<5} {'Location':<20} {'Status':<12} {'In Service':<20}")
+        print("-" * 120)
         
-        for scooter_id, brand, model, serial, soc, out_of_service, in_service in scooters:
+        for scooter_id, brand, model, serial, soc, out_of_service, lat, lon, in_service in scooters:
            
             try:
                 decrypted_brand = decrypt_data(brand)
                 decrypted_model = decrypt_data(model)
                 decrypted_serial = decrypt_data(serial)
+                decrypted_lat = decrypt_data(lat)
+                decrypted_lon = decrypt_data(lon)
              
                 display_brand = decrypted_brand if decrypted_brand else "Encrypted"
                 display_model = decrypted_model if decrypted_model else "Encrypted"
                 display_serial = decrypted_serial if decrypted_serial else "Encrypted"
+                location = f"{decrypted_lat}, {decrypted_lon}" if decrypted_lat and decrypted_lon else "Encrypted"
             except:
                 display_brand = "Encrypted"
                 display_model = "Encrypted"
                 display_serial = "Encrypted"
+                location = "Encrypted"
             
             status = "Out of Service" if out_of_service else "Active"
-            print(f"{scooter_id:<5} {display_brand:<15} {display_model:<20} {display_serial:<15} {soc}%{'':<4} {status:<12} {in_service:<20}")
+            print(f"{scooter_id:<5} {display_brand:<15} {display_model:<20} {display_serial:<15} {soc}%{'':<4} {location:<20} {status:<12} {in_service:<20}")
         
         close_connection(conn)
         
@@ -570,7 +953,8 @@ def search_scooters(search_term):
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, brand, model, serial_number, state_of_charge, out_of_service, in_service_date
+            SELECT id, brand, model, serial_number, state_of_charge, out_of_service, 
+                   latitude, longitude, in_service_date
             FROM Scooters
         ''')
         
@@ -581,7 +965,7 @@ def search_scooters(search_term):
         print(f"Checking {len(all_scooters)} scooters...")
         
         search_lower = search_term.lower()
-        for scooter_id, brand, model, serial, soc, out_of_service, in_service in all_scooters:
+        for scooter_id, brand, model, serial, soc, out_of_service, lat, lon, in_service in all_scooters:
             match_found = False
             
             if search_lower in str(scooter_id).lower():
@@ -590,6 +974,8 @@ def search_scooters(search_term):
                 decrypted_brand = decrypt_data(brand)
                 decrypted_model = decrypt_data(model)
                 decrypted_serial = decrypt_data(serial)
+                decrypted_lat = decrypt_data(lat)
+                decrypted_lon = decrypt_data(lon)
              
                 if (decrypted_brand and 
                     decrypted_brand != brand and 
@@ -611,6 +997,20 @@ def search_scooters(search_term):
                     search_lower in decrypted_serial.lower()):
                     match_found = True
                     print(f"Found match in serial: {decrypted_serial}")
+                
+                if (decrypted_lat and 
+                    decrypted_lat != lat and 
+                    len(decrypted_lat) < 20 and
+                    search_lower in decrypted_lat.lower()):
+                    match_found = True
+                    print(f"Found match in latitude: {decrypted_lat}")
+                
+                if (decrypted_lon and 
+                    decrypted_lon != lon and 
+                    len(decrypted_lon) < 20 and
+                    search_lower in decrypted_lon.lower()):
+                    match_found = True
+                    print(f"Found match in longitude: {decrypted_lon}")
                         
             except Exception as e:
                 print(f"Decryption error for scooter {scooter_id}: {e}")
@@ -621,32 +1021,39 @@ def search_scooters(search_term):
                     display_brand = decrypt_data(brand) if decrypt_data(brand) else "Encrypted"
                     display_model = decrypt_data(model) if decrypt_data(model) else "Encrypted"
                     display_serial = decrypt_data(serial) if decrypt_data(serial) else "Encrypted"
+                    display_lat = decrypt_data(lat) if decrypt_data(lat) else "Encrypted"
+                    display_lon = decrypt_data(lon) if decrypt_data(lon) else "Encrypted"
                 except:
                     display_brand = "Encrypted"
                     display_model = "Encrypted"
                     display_serial = "Encrypted"
+                    display_lat = "Encrypted"
+                    display_lon = "Encrypted"
                 
                 matching_scooters.append((
-                    scooter_id, display_brand, display_model, display_serial, soc, out_of_service, in_service
+                    scooter_id, display_brand, display_model, display_serial, soc, out_of_service, 
+                    display_lat, display_lon, in_service
                 ))
         
         if matching_scooters:
             print(f"Found {len(matching_scooters)} matching scooter(s)\n")
-            print("=" * 100)
+            print("=" * 120)
             print(f"    SEARCH RESULTS FOR '{search_term}'")
-            print("=" * 100)
-            print(f"{'ID':<5} {'Brand':<15} {'Model':<20} {'Serial':<15} {'SoC':<5} {'Status':<12} {'In Service':<20}")
-            print("-" * 100)
+            print("=" * 120)
+            print(f"{'ID':<5} {'Brand':<15} {'Model':<20} {'Serial':<15} {'SoC':<5} {'Location':<20} {'Status':<12} {'In Service':<20}")
+            print("-" * 120)
             
-            for scooter_id, brand, model, serial, soc, out_of_service, in_service in matching_scooters:
+            for scooter_id, brand, model, serial, soc, out_of_service, lat, lon, in_service in matching_scooters:
                 status = "Out of Service" if out_of_service else "Active"
-                print(f"{scooter_id:<5} {brand:<15} {model:<20} {serial:<15} {soc}%{'':<4} {status:<12} {in_service:<20}")
+                location = f"{lat}, {lon}" if lat != "Encrypted" and lon != "Encrypted" else "Encrypted"
+                print(f"{scooter_id:<5} {brand:<15} {model:<20} {serial:<15} {soc}%{'':<4} {location:<20} {status:<12} {in_service:<20}")
         else:
             print(f"No scooters found matching '{search_term}'")
             print("\n Try searching with:")
             print("   - Brand name (e.g., 'Segway', 'NIU')")
             print("   - Model name (e.g., 'Ninebot', 'N1S')")
             print("   - Serial number (partial or full)")
+            print("   - Latitude or longitude coordinates")
             print("   - Partial matches work (e.g., 'seg' finds 'Segway')")
         
         close_connection(conn)
@@ -658,9 +1065,18 @@ def update_scooter(scooter_id, update_data):
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        
+        # First validate that scooter exists
+        cursor.execute('SELECT id FROM Scooters WHERE id = ?', (scooter_id,))
+        scooter_exists = cursor.fetchone()
+        
+        if not scooter_exists:
+            print(f"❌ ERROR: No scooter found with ID {scooter_id}")
+            print(f"   Please select a valid scooter ID from the list above.")
+            return False
         set_clauses = []
         values = []
-        encrypted_fields = ['brand', 'model', 'serial_number']
+        encrypted_fields = ['brand', 'model', 'serial_number', 'latitude', 'longitude']
         
         for field, value in update_data.items():
             if field in encrypted_fields:

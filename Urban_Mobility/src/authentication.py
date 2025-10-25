@@ -2,6 +2,8 @@ import sqlite3
 import bcrypt
 import getpass
 from database import get_connection, close_connection
+from system_logging import log_login_attempt, detect_suspicious_patterns, log_action
+from session_management import create_session, check_session, terminate_session, display_session_info
 
 def hash_password(password):
     salt = bcrypt.gensalt()
@@ -20,15 +22,33 @@ def authenticate_user(username, password):
         
         if result:
             if username == 'super_admin' and password == 'Admin_123?':
+                log_login_attempt(username, True)
+                # REQUIREMENT: Session management - create session on successful login
+                create_session(username, result[1])
                 return result[1]  
             elif verify_password(result[0], password):
+                log_login_attempt(username, True)
+                # REQUIREMENT: Session management - create session on successful login
+                create_session(username, result[1])
                 return result[1]  
+        
+        # Failed login attempt
+        log_login_attempt(username, False)
         return None
     except Exception as e:
         print(f"Authentication error: {e}")
+        log_action("system", f"Authentication error for user {username}", str(e), True)
         return None
     finally:
         close_connection(conn)
+
+def logout_user(username):
+    """Logout user and terminate session"""
+    # REQUIREMENT: Session management - terminate session on logout
+    if terminate_session(username, "User logout"):
+        log_action(username, "User logged out", "Session terminated by user")
+        return True
+    return False
 
 def login():
     print("\n=== LOGIN ===")

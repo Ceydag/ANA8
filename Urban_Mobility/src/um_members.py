@@ -1,7 +1,9 @@
 import os
 import sys
 from database import initialize_db
-from authentication import login, change_password
+from authentication import login, change_password, logout_user
+from session_management import check_session, display_session_info, handle_invalid_input, handle_suspicious_activity
+from error_handler import handle_exception, handle_keyboard_interrupt, handle_database_error
 from system_logging import log_action, check_suspicious_activities, get_logs, get_suspicious_logs
 from backup import create_backup, generate_restore_code, restore_backup, list_backups, revoke_restore_code, list_restore_codes
 from crud_operations import *
@@ -36,11 +38,20 @@ def main():
     while True:
         try:
             if role == "Super Admin":
-                super_admin_menu(username)
+                result = super_admin_menu(username)
+                if result == "logout":
+                    print("Logging out...")
+                    break
             elif role == "System Admin":
-                system_admin_menu(username)
+                result = system_admin_menu(username)
+                if result == "logout":
+                    print("Logging out...")
+                    break
             elif role == "Service Engineer":
-                service_engineer_menu(username)
+                result = service_engineer_menu(username)
+                if result == "logout":
+                    print("Logging out...")
+                    break
             else:
                 print("Invalid role. Exiting system.")
                 break
@@ -51,6 +62,19 @@ def main():
             log_action(username, f"System error: {e}", suspicious=True)
 
 def super_admin_menu(username):
+    # REQUIREMENT: Session management - check session validity
+    is_valid, message = check_session(username)
+    if not is_valid:
+        print(f"Session error: {message}")
+        return "logout"
+    
+    # Check for suspicious activities and display alert
+    from system_logging import display_alert_if_suspicious
+    display_alert_if_suspicious()
+    
+    # REQUIREMENT: Session management - display session info
+    display_session_info(username)
+    
     while True:
         print("\n" + "=" * 50)
         print("    SUPER ADMIN MENU")
@@ -65,10 +89,11 @@ def super_admin_menu(username):
         print("8.  Revoke Restore Code")
         print("9.  List Restore Codes")
         print("10. View All Users")
-        print("11. Exit System")
+        print("11. Logout")
+        print("12. Exit System")
         print("-" * 50)
         
-        choice = input("Enter your choice (1-11): ").strip()
+        choice = input("Enter your choice (1-12): ").strip()
         
         if choice == "1":
             manage_system_admins(username)
@@ -91,11 +116,31 @@ def super_admin_menu(username):
         elif choice == "10":
             list_users(username)
         elif choice == "11":
+            # REQUIREMENT: Session management - logout user
+            if logout_user(username):
+                print("Successfully logged out.")
+                return "logout"
+            else:
+                print("Logout failed.")
+        elif choice == "12":
             exit_system(username)
         else:
             print("Invalid choice. Please try again.")
 
 def system_admin_menu(username):
+    # REQUIREMENT: Session management - check session validity
+    is_valid, message = check_session(username)
+    if not is_valid:
+        print(f"Session error: {message}")
+        return "logout"
+    
+    # Check for suspicious activities and display alert
+    from system_logging import display_alert_if_suspicious
+    display_alert_if_suspicious()
+    
+    # REQUIREMENT: Session management - display session info
+    display_session_info(username)
+    
     while True:
         print("\n" + "=" * 50)
         print("    SYSTEM ADMIN MENU")
@@ -128,13 +173,28 @@ def system_admin_menu(username):
         elif choice == "7":
             restore_backup_menu(username)
         elif choice == "8":
-            list_users(username)
+            # System Admin can only view Service Engineers
+            from crud_operations import list_service_engineers
+            list_service_engineers()
         elif choice == "9":
             exit_system(username)
         else:
             print("Invalid choice. Please try again.")
 
 def service_engineer_menu(username):
+    # REQUIREMENT: Session management - check session validity
+    is_valid, message = check_session(username)
+    if not is_valid:
+        print(f"Session error: {message}")
+        return "logout"
+    
+    # Check for suspicious activities and display alert
+    from system_logging import display_alert_if_suspicious
+    display_alert_if_suspicious()
+    
+    # REQUIREMENT: Session management - display session info
+    display_session_info(username)
+    
     while True:
         print("\n" + "=" * 50)
         print("    SERVICE ENGINEER MENU")
@@ -142,10 +202,11 @@ def service_engineer_menu(username):
         print("1.  Change Password")
         print("2.  Search Scooters")
         print("3.  Update Scooter Information")
-        print("4.  Exit System")
+        print("4.  Logout")
+        print("5.  Exit System")
         print("-" * 50)
         
-        choice = input("Enter your choice (1-4): ").strip()
+        choice = input("Enter your choice (1-5): ").strip()
         
         if choice == "1":
             change_password(username)
@@ -154,6 +215,13 @@ def service_engineer_menu(username):
         elif choice == "3":
             update_scooter_menu_service_engineer()
         elif choice == "4":
+            # REQUIREMENT: Session management - logout user
+            if logout_user(username):
+                print("Successfully logged out.")
+                return "logout"
+            else:
+                print("Logout failed.")
+        elif choice == "5":
             exit_system(username)
         else:
             print("Invalid choice. Please try again.")
@@ -184,20 +252,49 @@ def manage_system_admins(username):
 
 def update_system_admin_menu(current_user):
     from input_validation import get_username, get_first_name, get_last_name
+    from crud_operations import list_system_admins, update_user_by_id
+    from database import get_connection, close_connection
 
-    username = input("Enter System Administrator username to update: ").strip()
-    if not username:
-        print("Username is required. Operation cancelled")
+    print("\n" + "=" * 60)
+    print("    UPDATE SYSTEM ADMINISTRATOR")
+    print("=" * 60)
+    print("⚠️  WARNING: This will update user information!")
+    print("⚠️  NOTE: Super Admin account (ID 1) is protected and cannot be updated!")
+    print()
+    
+    # Check if there are any System Admins first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("System Admin",))
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No System Administrators found in the system.")
+        print("   Cannot update System Administrators when none exist.")
         return
-
-    user = search_user(username)
-    if not user:
-        print(f"System Administrator '{username}' not found.")
+    
+    # Show list of System Administrators
+    list_system_admins(current_user)
+    
+    print("\nEnter the ID of the System Administrator to update:")
+    user_id = input("User ID: ").strip()
+    
+    if not user_id:
+        print("User ID is required.")
         return
-        
-    if user[1] != 'System Admin':
-        print(f"User '{username}' is not a System Administrator.")
+    
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        print("Invalid user ID. Please enter a number.")
         return
+    
+    # IMMEDIATE VALIDATION - Check if user exists with correct role
+    from crud_operations import validate_user_exists_with_role
+    is_valid, username, role = validate_user_exists_with_role(user_id, "System Admin")
+    if not is_valid:
+        return  # Exit if validation fails
     
     print("\n" + "=" * 50)
     print("    UPDATE SYSTEM ADMINISTRATOR")
@@ -215,7 +312,7 @@ def update_system_admin_menu(current_user):
         new_first = get_first_name()
         if new_first:
             update_data = {"first_name": new_first}
-            if update_user(username, update_data, current_user):
+            if update_user_by_id(user_id, update_data, current_user, "System Admin"):
                 print("First name updated successfully!")
             else:
                 print("Failed to update first name.")
@@ -227,7 +324,7 @@ def update_system_admin_menu(current_user):
         new_last = get_last_name()
         if new_last:
             update_data = {"last_name": new_last}
-            if update_user(username, update_data, current_user):
+            if update_user_by_id(user_id, update_data, current_user, "System Admin"):
                 print("Last name updated successfully!")
             else:
                 print("Failed to update last name.")
@@ -239,7 +336,7 @@ def update_system_admin_menu(current_user):
         new_user = get_username()
         if new_user:
             update_data = {"username": new_user}
-            if update_user(username, update_data, current_user):
+            if update_user_by_id(user_id, update_data, current_user, "System Admin"):
                 print("Username updated successfully!")
             else:
                 print("Failed to update username.")
@@ -280,20 +377,48 @@ def manage_service_engineers(username):
 
 def update_service_engineer_menu(current_user):
     from input_validation import get_username, get_first_name, get_last_name
+    from crud_operations import list_service_engineers, update_user_by_id
+    from database import get_connection, close_connection
 
-    username = input("Enter Service Engineer username to update: ").strip()
-    if not username:
-        print("Username is required. Operation cancelled")
+    print("\n" + "=" * 60)
+    print("    UPDATE SERVICE ENGINEER")
+    print("=" * 60)
+    print("⚠️  WARNING: This will update user information!")
+    print()
+    
+    # Check if there are any Service Engineers first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("Service Engineer",))
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No Service Engineers found in the system.")
+        print("   Cannot update Service Engineers when none exist.")
         return
-
-    user = search_user(username)
-    if not user:
-        print(f"Service Engineer '{username}' not found.")
+    
+    # Show list of Service Engineers
+    list_service_engineers(current_user)
+    
+    print("\nEnter the ID of the Service Engineer to update:")
+    user_id = input("User ID: ").strip()
+    
+    if not user_id:
+        print("User ID is required.")
         return
-        
-    if user[1] != 'Service Engineer':
-        print(f"User '{username}' is not a Service Engineer.")
+    
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        print("Invalid user ID. Please enter a number.")
         return
+    
+    # IMMEDIATE VALIDATION - Check if user exists with correct role
+    from crud_operations import validate_user_exists_with_role
+    is_valid, username, role = validate_user_exists_with_role(user_id, "Service Engineer")
+    if not is_valid:
+        return  # Exit if validation fails
     
     print("\n" + "=" * 50)
     print("    UPDATE SERVICE ENGINEER")
@@ -311,7 +436,7 @@ def update_service_engineer_menu(current_user):
         new_first = get_first_name()
         if new_first:
             update_data = {"first_name": new_first}
-            if update_user(username, update_data, current_user):
+            if update_user_by_id(user_id, update_data, current_user, "System Admin"):
                 print("First name updated successfully!")
             else:
                 print("Failed to update first name.")
@@ -323,7 +448,7 @@ def update_service_engineer_menu(current_user):
         new_last = get_last_name()
         if new_last:
             update_data = {"last_name": new_last}
-            if update_user(username, update_data, current_user):
+            if update_user_by_id(user_id, update_data, current_user, "System Admin"):
                 print("Last name updated successfully!")
             else:
                 print("Failed to update last name.")
@@ -335,7 +460,7 @@ def update_service_engineer_menu(current_user):
         new_user = get_username()
         if new_user:
             update_data = {"username": new_user}
-            if update_user(username, update_data, current_user):
+            if update_user_by_id(user_id, update_data, current_user, "System Admin"):
                 print("Username updated successfully!")
             else:
                 print("Failed to update username.")
@@ -477,15 +602,40 @@ def add_traveller_menu():
 def update_traveller_menu(current_user):
     from input_validation import (get_first_name, get_last_name, get_gender, get_zip_code, 
                                 get_city, get_email, get_phone, get_driving_license)
+    from crud_operations import list_travellers
+    from database import get_connection, close_connection
 
-    customer_id = input("Enter Traveller Customer ID to update: ").strip()
-    if not customer_id:
-        print("Customer ID is required. Operation cancelled")
+    print("\n" + "=" * 60)
+    print("    UPDATE TRAVELLER")
+    print("=" * 60)
+    print("⚠️  WARNING: This will update traveller information!")
+    print()
+    
+    # Check if there are any travellers first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Travellers')
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No travellers found in the system.")
+        print("   Cannot update travellers when none exist.")
+        return
+    
+    # Show list of all travellers
+    list_travellers()
+    
+    print("\nEnter the ID of the Traveller to update:")
+    traveller_id = input("Traveller ID: ").strip()
+    if not traveller_id:
+        print("Traveller ID is required. Operation cancelled")
         return
 
-    traveller = search_traveller_id(customer_id)
+    traveller = search_traveller_by_id(traveller_id)
     if not traveller:
-        print(f"Traveller with Customer ID '{customer_id}' not found.")
+        print(f"❌ ERROR: Traveller with ID '{traveller_id}' not found.")
+        print(f"   Please select a valid traveller ID from the list above.")
         return
     
     print("\n" + "=" * 50)
@@ -511,7 +661,7 @@ def update_traveller_menu(current_user):
         new_first = get_first_name()
         if new_first:
             update_data = {"first_name": new_first}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("First name updated successfully!")
             else:
                 print("Failed to update first name.")
@@ -523,7 +673,7 @@ def update_traveller_menu(current_user):
         new_last = get_last_name()
         if new_last:
             update_data = {"last_name": new_last}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Last name updated successfully!")
             else:
                 print("Failed to update last name.")
@@ -535,7 +685,7 @@ def update_traveller_menu(current_user):
         new_gender = get_gender()
         if new_gender:
             update_data = {"gender": new_gender}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Gender updated successfully!")
             else:
                 print("Failed to update gender.")
@@ -547,7 +697,7 @@ def update_traveller_menu(current_user):
         new_street = input("Enter new street name: ").strip()
         if new_street:
             update_data = {"street_name": new_street}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Street name updated successfully!")
             else:
                 print("Failed to update street name.")
@@ -559,7 +709,7 @@ def update_traveller_menu(current_user):
         new_house = input("Enter new house number: ").strip()
         if new_house:
             update_data = {"house_number": new_house}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("House number updated successfully!")
             else:
                 print("Failed to update house number.")
@@ -571,7 +721,7 @@ def update_traveller_menu(current_user):
         new_zip = get_zip_code()
         if new_zip:
             update_data = {"zip_code": new_zip}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Zip code updated successfully!")
             else:
                 print("Failed to update zip code.")
@@ -583,7 +733,7 @@ def update_traveller_menu(current_user):
         new_city = get_city()
         if new_city:
             update_data = {"city": new_city}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("City updated successfully!")
             else:
                 print("Failed to update city.")
@@ -595,7 +745,7 @@ def update_traveller_menu(current_user):
         new_email = get_email()
         if new_email:
             update_data = {"email": new_email}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Email updated successfully!")
             else:
                 print("Failed to update email.")
@@ -607,7 +757,7 @@ def update_traveller_menu(current_user):
         new_phone = get_phone()
         if new_phone:
             update_data = {"mobile_phone": new_phone}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Phone number updated successfully!")
             else:
                 print("Failed to update phone number.")
@@ -619,7 +769,7 @@ def update_traveller_menu(current_user):
         new_license = get_driving_license()
         if new_license:
             update_data = {"driving_license": new_license}
-            if update_traveller(customer_id, update_data):
+            if update_traveller(traveller_id, update_data):
                 print("Driving license updated successfully!")
             else:
                 print("Failed to update driving license.")
@@ -713,7 +863,7 @@ def add_scooter_menu():
         print("Failed to add scooter. Please check your input.")
 
 def search_travellers_menu():
-    search_term = input("Enter search term (name, email, phone, or customer ID): ").strip()
+    search_term = input("Enter search term (name, email, phone, or traveller ID): ").strip()
     if search_term:
         search_travellers(search_term)
 
@@ -813,10 +963,54 @@ def update_scooter_menu():
     from input_validation import (get_brand, get_model, get_serial_number, get_top_speed,
                                 get_battery_capacity, get_state_of_charge, get_target_range,
                                 get_coordinates, get_boolean_input, get_mileage, get_maintenance_date)
+    from crud_operations import list_scooters
+    from database import get_connection, close_connection
     
-    scooter_id = input("Enter Scooter ID to update: ").strip()
+    print("\n" + "=" * 60)
+    print("    UPDATE SCOOTER")
+    print("=" * 60)
+    print("⚠️  WARNING: This will update scooter information!")
+    print()
+    
+    # Check if there are any scooters first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Scooters')
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No scooters found in the system.")
+        print("   Cannot update scooters when none exist.")
+        return
+    
+    # Show list of all scooters
+    list_scooters()
+    
+    print("\nEnter the ID of the Scooter to update:")
+    scooter_id = input("Scooter ID: ").strip()
+    if not scooter_id:
+        print("Scooter ID is required. Operation cancelled")
+        return
+    
     if not scooter_id.isdigit():
         print("Invalid scooter ID. Must be a number.")
+        return
+    
+    # IMMEDIATE VALIDATION - Check if scooter exists
+    from crud_operations import update_scooter
+    # Test if scooter exists by trying to get it
+    import sqlite3
+    from database import get_connection, close_connection
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM Scooters WHERE id = ?', (int(scooter_id),))
+    scooter_exists = cursor.fetchone()
+    close_connection(conn)
+    
+    if not scooter_exists:
+        print(f"❌ ERROR: No scooter found with ID {scooter_id}")
+        print(f"   Please select a valid scooter ID from the list above.")
         return
     
     print("\n" + "=" * 50)
@@ -976,18 +1170,103 @@ def update_scooter_menu():
         print("Invalid field selection. Please choose 1-12.")
 
 def delete_traveller_menu():
-    customer_id = input("Enter Customer ID to delete: ").strip()
-    if customer_id:
-        confirm = input(f"Are you sure you want to delete traveller {customer_id}? (y/n): ").strip().lower()
-        if confirm == 'y':
-            delete_traveller(customer_id)
+    from crud_operations import list_travellers
+    from database import get_connection, close_connection
+    
+    print("\n" + "=" * 60)
+    print("    DELETE TRAVELLER")
+    print("=" * 60)
+    print("⚠️  WARNING: This action cannot be undone!")
+    print()
+    
+    # Check if there are any travellers first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Travellers')
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No travellers found in the system.")
+        print("   Cannot delete travellers when none exist.")
+        return
+    
+    # Show list of all travellers
+    list_travellers()
+    
+    print("\nEnter the ID of the Traveller to delete:")
+    traveller_id = input("Traveller ID: ").strip()
+    if not traveller_id:
+        print("Traveller ID is required. Operation cancelled")
+        return
+    
+    # Validate traveller exists
+    from crud_operations import search_traveller_by_id
+    traveller = search_traveller_by_id(traveller_id)
+    if not traveller:
+        print(f"❌ ERROR: Traveller with ID '{traveller_id}' not found.")
+        print(f"   Please select a valid traveller ID from the list above.")
+        return
+    
+    confirm = input(f"Are you sure you want to delete traveller {traveller_id}? (y/n): ").strip().lower()
+    if confirm == 'y':
+        delete_traveller(traveller_id)
+    else:
+        print("Deletion cancelled.")
 
 def delete_scooter_menu():
-    scooter_id = input("Enter Scooter ID to delete: ").strip()
-    if scooter_id.isdigit():
-        confirm = input(f"Are you sure you want to delete scooter {scooter_id}? (y/n): ").strip().lower()
-        if confirm == 'y':
-            delete_scooter(int(scooter_id))
+    from crud_operations import list_scooters
+    from database import get_connection, close_connection
+    
+    print("\n" + "=" * 60)
+    print("    DELETE SCOOTER")
+    print("=" * 60)
+    print("⚠️  WARNING: This action cannot be undone!")
+    print()
+    
+    # Check if there are any scooters first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Scooters')
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No scooters found in the system.")
+        print("   Cannot delete scooters when none exist.")
+        return
+    
+    # Show list of all scooters
+    list_scooters()
+    
+    print("\nEnter the ID of the Scooter to delete:")
+    scooter_id = input("Scooter ID: ").strip()
+    if not scooter_id:
+        print("Scooter ID is required. Operation cancelled")
+        return
+    
+    if not scooter_id.isdigit():
+        print("Invalid scooter ID. Must be a number.")
+        return
+    
+    # Validate scooter exists
+    from database import get_connection, close_connection
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM Scooters WHERE id = ?', (int(scooter_id),))
+    scooter_exists = cursor.fetchone()
+    close_connection(conn)
+    
+    if not scooter_exists:
+        print(f"❌ ERROR: Scooter with ID '{scooter_id}' not found.")
+        print(f"   Please select a valid scooter ID from the list above.")
+        return
+    
+    confirm = input(f"Are you sure you want to delete scooter {scooter_id}? (y/n): ").strip().lower()
+    if confirm == 'y':
+        delete_scooter(int(scooter_id))
+    else:
+        print("Deletion cancelled.")
 
 def add_system_admin(current_user):
     print("\n" + "=" * 50)
@@ -1089,15 +1368,95 @@ def list_service_engineers():
     list_users("super_admin")
 
 def delete_system_admin():
-    username = input("Enter username to delete: ").strip()
-    delete_user(username, "super_admin")
+    from database import get_connection, close_connection
+    
+    print("\n" + "=" * 60)
+    print("    DELETE SYSTEM ADMINISTRATOR")
+    print("=" * 60)
+    print("⚠️  WARNING: This action cannot be undone!")
+    print("⚠️  Super Admin account cannot be deleted.")
+    print()
+    
+    # Check if there are any System Admins first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("System Admin",))
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No System Administrators found in the system.")
+        print("   Cannot delete System Administrators when none exist.")
+        return
+    
+    # Show list of System Administrators
+    from crud_operations import list_system_admins
+    list_system_admins("super_admin")
+    
+    print("\nEnter the ID of the System Administrator to delete:")
+    user_id = input("User ID: ").strip()
+    
+    if not user_id:
+        print("User ID is required.")
+        return
+    
+    try:
+        user_id = int(user_id)
+        delete_user_by_id(user_id, "super_admin", "System Admin")
+    except ValueError:
+        print("Invalid user ID. Please enter a number.")
+        return
 
 def delete_service_engineer():
-    username = input("Enter username to delete: ").strip()
-    delete_user(username, "super_admin")
+    from database import get_connection, close_connection
+    
+    print("\n" + "=" * 60)
+    print("    DELETE SERVICE ENGINEER")
+    print("=" * 60)
+    print("⚠️  WARNING: This action cannot be undone!")
+    print()
+    
+    # Check if there are any Service Engineers first
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("Service Engineer",))
+    count = cursor.fetchone()[0]
+    close_connection(conn)
+    
+    if count == 0:
+        print("📋 No Service Engineers found in the system.")
+        print("   Cannot delete Service Engineers when none exist.")
+        return
+    
+    # Show list of Service Engineers
+    from crud_operations import list_service_engineers
+    list_service_engineers("super_admin")
+    
+    print("\nEnter the ID of the Service Engineer to delete:")
+    user_id = input("User ID: ").strip()
+    
+    if not user_id:
+        print("User ID is required.")
+        return
+    
+    try:
+        user_id = int(user_id)
+        delete_user_by_id(user_id, "super_admin", "Service Engineer")
+    except ValueError:
+        print("Invalid user ID. Please enter a number.")
+        return
 
 def reset_password_menu():
-    username = input("Enter username to reset password: ").strip()
+    print("\n" + "=" * 60)
+    print("    RESET USER PASSWORD")
+    print("=" * 60)
+    
+    # Show list of all users
+    from crud_operations import list_users
+    list_users("super_admin")
+    
+    print("\nEnter the username to reset password:")
+    username = input("Username: ").strip()
     new_password = input("Enter new temporary password: ").strip()
     
     if not username or not new_password:
@@ -1107,6 +1466,8 @@ def reset_password_menu():
     from authentication import hash_password
     hashed_password = hash_password(new_password)
     
+    # Fix: Use the correct function name
+    from crud_operations import update_user_password
     if update_user_password(username, hashed_password, "super_admin"):
         print("Password reset successfully!")
     else:
@@ -1121,17 +1482,18 @@ def view_logs(username):
     choice = input("Enter your choice (1-3): ").strip()
     
     if choice == "1":
-        logs = get_logs()
-        if isinstance(logs, list):
-            for log in logs[-20:]:  
-                print(log)
-        else:
-            print(logs)
+        from system_logging import display_logs_formatted
+        display_logs_formatted()
     elif choice == "2":
+        from system_logging import get_suspicious_logs
         suspicious_logs = get_suspicious_logs()
         if isinstance(suspicious_logs, list):
+            print("\n" + "=" * 100)
+            print("                                    SUSPICIOUS ACTIVITIES")
+            print("=" * 100)
             for log in suspicious_logs:
                 print(log)
+            print("=" * 100)
         else:
             print(suspicious_logs)
 
