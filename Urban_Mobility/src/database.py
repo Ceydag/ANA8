@@ -9,13 +9,13 @@ from encryption import encrypt_data, decrypt_data
 
 def initialize_db():
     """Initialize the SQLite database with required tables"""
-    # Create database file if it doesn't exist
+  
     db_path = 'urban_mobility.db'
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Create Users table
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +28,7 @@ def initialize_db():
     )
     ''')
     
-    # Create Travellers table
+ 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Travellers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +48,7 @@ def initialize_db():
     )
     ''')
     
-    # Create Scooters table
+ 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Scooters (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +69,7 @@ def initialize_db():
     )
     ''')
     
-    # Create RestoreCodes table for backup restore functionality
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS RestoreCodes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,8 +80,7 @@ def initialize_db():
         used BOOLEAN DEFAULT 0
     )
     ''')
-    
-    # Insert hardcoded Super Admin with proper password hash
+
     import bcrypt
     salt = bcrypt.gensalt()
     super_admin_password = bcrypt.hashpw('Admin_123?'.encode('utf-8'), salt)
@@ -105,7 +104,7 @@ def get_connection():
         conn.execute('PRAGMA busy_timeout=30000')
         return conn
     except sqlite3.OperationalError as e:
-        print(f"❌ Database connection error: {e}")
+        print(f"Database connection error: {e}")
         return None
 
 def close_connection(conn):
@@ -114,7 +113,7 @@ def close_connection(conn):
         try:
             conn.close()
         except sqlite3.Error as e:
-            print(f"❌ Error closing database connection: {e}")
+            print(f"Error closing database connection: {e}")
 
 def unlock_database():
     """Attempt to unlock the database by closing any lingering connections"""

@@ -1,0 +1,65 @@
+2025-10-25 06:44:51,903 - 25-10-2025 06:44:51 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 06:47:26,855 - 25-10-2025 06:47:26 | User: super_admin | Action: Created new System Admin user: helper123 | SUSPICIOUS: No
+2025-10-25 06:52:36,855 - 25-10-2025 06:52:36 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 06:53:09,764 - 25-10-2025 06:53:09 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 07:14:29,052 - 25-10-2025 07:14:29 | User: super_admin | Action: Created new Service Engineer user: Delighaw | SUSPICIOUS: No
+2025-10-25 07:15:11,764 - 25-10-2025 07:15:11 | User: super_admin | Action: Deleted user: Delighaw | SUSPICIOUS: No
+2025-10-25 07:16:44,779 - 25-10-2025 07:16:44 | User: super_admin | Action: Created new Service Engineer user: Adhawdjwba | SUSPICIOUS: No
+2025-10-25 07:17:24,846 - 25-10-2025 07:17:24 | User: super_admin | Action: Updated password for user: Adhawdjwba | SUSPICIOUS: No
+2025-10-25 07:35:34,656 - 25-10-2025 07:35:34 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 07:45:25,602 - 25-10-2025 07:45:25 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 07:48:22,411 - 25-10-2025 07:48:22 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 08:15:42,990 - 25-10-2025 08:15:42 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 08:19:37,331 - 25-10-2025 08:19:37 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 08:20:10,091 - 25-10-2025 08:20:10 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 08:35:23,519 - 25-10-2025 08:35:23 | User: super_admin | Action: Created new System Admin user: Alkdawoia | SUSPICIOUS: No
+2025-10-25 08:36:12,182 - 25-10-2025 08:36:12 | User: super_admin | Action: Updated password for user: Alkdawoia | SUSPICIOUS: No
+2025-10-25 08:37:31,580 - 25-10-2025 08:37:31 | User: super_admin | Action: Deleted user: Alkdawoia | SUSPICIOUS: No
+2025-10-25 08:43:28,436 - 25-10-2025 08:43:28 | User: super_admin | Action: Created new System Admin user: testing123 | SUSPICIOUS: No
+2025-10-25 08:44:12,038 - 25-10-2025 08:44:12 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 08:49:15,062 - 25-10-2025 08:49:15 | User: testing123 | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 08:54:36,721 - 25-10-2025 08:54:36 | User: testing123 | Action: System exit | SUSPICIOUS: No
+2025-10-25 08:55:00,359 - 25-10-2025 08:55:00 | User: testing123 | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 09:00:41,498 - 25-10-2025 09:00:41 | User: testing123 | Action: Created new Service Engineer user: Testing123 | SUSPICIOUS: No
+2025-10-25 09:02:22,292 - 25-10-2025 09:02:22 | User: super_admin | Action: Updated password for user: Testing123 | SUSPICIOUS: No
+2025-10-25 09:03:20,269 - 25-10-2025 09:03:20 | User: super_admin | Action: Deleted user: Testing123 | SUSPICIOUS: No
+2025-10-25 09:14:38,916 - 25-10-2025 09:14:38 | User: testing123 | Action: Created new Service Engineer user: Testing123 | SUSPICIOUS: No
+2025-10-25 09:14:45,000 - 25-10-2025 09:14:44 | User: testing123 | Action: System exit | SUSPICIOUS: No
+2025-10-25 09:15:55,479 - 25-10-2025 09:15:55 | User: Testing123 | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 09:18:57,202 - 25-10-2025 09:18:57 | User: Testing123 | Action: System exit | SUSPICIOUS: No
+2025-10-25 09:19:25,000 - 25-10-2025 09:19:24 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 09:28:55,186 - 25-10-2025 09:28:55 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 09:29:21,483 - 25-10-2025 09:29:21 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 09:53:15,971 - 25-10-2025 09:53:15 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:16:07,817 - 25-10-2025 10:16:07 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:20:03,064 - 25-10-2025 10:20:03 | User: super_admin | Action: System error: list_users() takes 0 positional arguments but 1 was given | SUSPICIOUS: Yes
+2025-10-25 10:20:21,908 - 25-10-2025 10:20:21 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:20:29,628 - 25-10-2025 10:20:29 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:28:31,144 - 25-10-2025 10:28:31 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:28:49,069 - 25-10-2025 10:28:49 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:29:09,719 - 25-10-2025 10:29:09 | User: super_admin | Action: System error: name 'search_user' is not defined | SUSPICIOUS: Yes
+2025-10-25 10:30:12,006 - 25-10-2025 10:30:12 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:30:21,708 - 25-10-2025 10:30:21 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:31:07,047 - 25-10-2025 10:31:07 | User: super_admin | Action: Updated user Testing123: first_name | SUSPICIOUS: No
+2025-10-25 10:31:22,374 - 25-10-2025 10:31:22 | User: super_admin | Action: Updated user Testing123: last_name | SUSPICIOUS: No
+2025-10-25 10:39:21,303 - 25-10-2025 10:39:21 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:39:43,337 - 25-10-2025 10:39:43 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:42:01,287 - 25-10-2025 10:42:01 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:42:12,199 - 25-10-2025 10:42:12 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:45:20,923 - 25-10-2025 10:45:20 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:45:49,606 - 25-10-2025 10:45:49 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:46:55,520 - 25-10-2025 10:46:55 | User: super_admin | Action: Updated user helper123: username | SUSPICIOUS: No
+2025-10-25 10:47:55,328 - 25-10-2025 10:47:55 | User: super_admin | Action: System error:  | SUSPICIOUS: Yes
+2025-10-25 10:47:56,076 - 25-10-2025 10:47:56 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:48:24,323 - 25-10-2025 10:48:24 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:48:42,015 - 25-10-2025 10:48:42 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:48:59,769 - 25-10-2025 10:48:59 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 10:49:55,933 - 25-10-2025 10:49:55 | User: super_admin | Action: Created new System Admin user: testing123 | SUSPICIOUS: No
+2025-10-25 10:50:00,467 - 25-10-2025 10:50:00 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 10:50:14,079 - 25-10-2025 10:50:14 | User: testing123 | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 11:07:55,138 - 25-10-2025 11:07:55 | User: testing123 | Action: System exit | SUSPICIOUS: No
+2025-10-25 11:08:02,851 - 25-10-2025 11:08:02 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 11:08:48,183 - 25-10-2025 11:08:48 | User: super_admin | Action: Created new System Admin user: Hello12345 | SUSPICIOUS: No
+2025-10-25 11:08:49,653 - 25-10-2025 11:08:49 | User: super_admin | Action: System exit | SUSPICIOUS: No
+2025-10-25 11:09:51,572 - 25-10-2025 11:09:51 | User: super_admin | Action: Logged in successfully | SUSPICIOUS: No
+2025-10-25 11:10:09,869 - 25-10-2025 11:10:09 | User: super_admin | Action: System exit | SUSPICIOUS: No
