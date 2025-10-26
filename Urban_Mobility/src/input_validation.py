@@ -85,7 +85,7 @@ class InputValidator:
                 else:
                     return False, f"{field_name} must be at most {max_val}"
             else:
-                return True, f"Valid {field_name}"
+                return False, f"Unknown or undefined range type: {range_type}"
                 
         except ValueError:
             return False, f"{field_name} must be a valid number"
