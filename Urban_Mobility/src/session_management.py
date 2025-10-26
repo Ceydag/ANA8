@@ -160,13 +160,10 @@ def handle_suspicious_activity(username, activity_description):
 
 
 def update_session_username(old_username, new_username):
-    """Update the username in the session when user changes their username"""
     if old_username in sessions:
         session = sessions[old_username]
-        # Update the session's username
         session.username = new_username
         
-        # Update the sessions dictionary to use the new username as key
         sessions[new_username] = session
         del sessions[old_username]
         
@@ -176,7 +173,6 @@ def update_session_username(old_username, new_username):
 
 
 def get_current_user_id(username):
-    """Get the user ID for the current user from the database"""
     try:
         from database import get_connection, close_connection
         from encryption import decrypt_data
@@ -184,19 +180,16 @@ def get_current_user_id(username):
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Find the user by decrypting all usernames
         cursor.execute('SELECT id, username FROM Users')
         all_users = cursor.fetchall()
         
         for existing_id, existing_username in all_users:
             try:
-                # Try to decrypt the username
                 decrypted_username = decrypt_data(existing_username)
                 if decrypted_username.lower() == username.lower():
                     close_connection(conn)
                     return existing_id
             except:
-                # If decryption fails, check if it's a non-encrypted username (like super_admin)
                 if existing_username.lower() == username.lower():
                     close_connection(conn)
                     return existing_id

@@ -1,4 +1,3 @@
-import sqlite3
 import bcrypt
 import getpass
 from database import get_connection, close_connection
@@ -78,7 +77,6 @@ def login():
             print("You MUST change your password immediately for security reasons.")
             print("="*60)
             
-            # Force password change (no current password required)
             if change_temp_password(username):
                 print("Password changed successfully!")
                 print("You can now continue using the system.")
@@ -86,7 +84,6 @@ def login():
                 print("Password change failed. Please try again.")
                 return None, None
         
-        # Check for unread suspicious activities for System Admins and Super Admins
         if role in ["System Admin", "Super Admin"]:
             from system_logging import display_alert_if_suspicious
             display_alert_if_suspicious(username)
@@ -97,7 +94,6 @@ def login():
         return None, None
 
 def change_temp_password(username):
-    """Change password for users with temporary password (no current password required)"""
     print("\n=== CHANGE TEMPORARY PASSWORD ===")
     print("You are changing your temporary password.")
     print("Please enter a new secure password.")
@@ -119,13 +115,11 @@ def change_temp_password(username):
         print("Password cannot be empty.")
         return False
     
-    # Validate password strength
     if not validate_password(new_password):
         print("Password validation failed: Invalid password format")
         print("Please ensure your password meets all the requirements listed above.")
         return False
     
-    # Hash and update password
     hashed_password = hash_password(new_password)
     
     from crud_operations import update_user_password
@@ -146,7 +140,6 @@ def change_password(username):
     try:
         from encryption import decrypt_data
         
-        # Find the user by decrypting all usernames
         cursor.execute('SELECT id, username, password_hash FROM Users')
         all_users = cursor.fetchall()
         
@@ -155,14 +148,12 @@ def change_password(username):
         
         for existing_id, existing_username, password_hash in all_users:
             try:
-                # Try to decrypt the username
                 decrypted_username = decrypt_data(existing_username)
                 if decrypted_username.lower() == username.lower():
                     user_id = existing_id
                     stored_password_hash = password_hash
                     break
             except:
-                # If decryption fails, check if it's a non-encrypted username (like super_admin)
                 if existing_username.lower() == username.lower():
                     user_id = existing_id
                     stored_password_hash = password_hash

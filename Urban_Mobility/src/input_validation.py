@@ -47,19 +47,19 @@ class InputValidator:
         if pattern_type not in self.PATTERNS:
             return False, f"Unknown validation pattern: {pattern_type}"
         
-        if not re.match(self.PATTERNS[pattern_type], value):
-            return False, f"Invalid {field_name} format"
+        if re.match(self.PATTERNS[pattern_type], value):
+            return True, f"Valid {field_name}"
         
-        return True, f"Valid {field_name}"
+        return False, f"Invalid {field_name} format"
 
     def validate_choice(self, value, choices, field_name):
         if not value:
             return False, f"{field_name} cannot be empty"
         
-        if value not in choices:
-            return False, f"{field_name} must be one of: {', '.join(choices)}"
+        if value in choices:
+            return True, f"Valid {field_name}"
         
-        return True, f"Valid {field_name}"
+        return False, f"{field_name} must be one of: {', '.join(choices)}"
 
     def validate_numeric_range(self, value, range_type, field_name):
         if not value:
@@ -69,13 +69,24 @@ class InputValidator:
             num_value = float(value)
             min_val, max_val = self.RANGES.get(range_type, (None, None))
             
-            if min_val is not None and num_value < min_val:
-                return False, f"{field_name} must be at least {min_val}"
-            
-            if max_val is not None and num_value > max_val:
-                return False, f"{field_name} must be at most {max_val}"
-            
-            return True, f"Valid {field_name}"
+            if min_val is not None and max_val is not None:
+                if min_val <= num_value <= max_val:
+                    return True, f"Valid {field_name}"
+                else:
+                    return False, f"{field_name} must be between {min_val} and {max_val}"
+            elif min_val is not None:
+                if num_value >= min_val:
+                    return True, f"Valid {field_name}"
+                else:
+                    return False, f"{field_name} must be at least {min_val}"
+            elif max_val is not None:
+                if num_value <= max_val:
+                    return True, f"Valid {field_name}"
+                else:
+                    return False, f"{field_name} must be at most {max_val}"
+            else:
+                return True, f"Valid {field_name}"
+                
         except ValueError:
             return False, f"{field_name} must be a valid number"
 
@@ -89,9 +100,10 @@ class InputValidator:
         
         try:
             date_obj = datetime.strptime(value, '%Y-%m-%d')
-            if date_obj > datetime.now():
+            if date_obj <= datetime.now():
+                return True, f"Valid {field_name}"
+            else:
                 return False, f"{field_name} cannot be in the future"
-            return True, f"Valid {field_name}"
         except ValueError:
             return False, f"Invalid {field_name}"
 
@@ -106,13 +118,14 @@ class InputValidator:
             lat_min, lat_max = self.COORDINATE_BOUNDS['latitude']
             lon_min, lon_max = self.COORDINATE_BOUNDS['longitude']
             
-            if not (lat_min <= lat <= lat_max) or not (lon_min <= lon <= lon_max):
+            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
+                if len(str(lat).split('.')[-1]) <= 5 and len(str(lon).split('.')[-1]) <= 5:
+                    return True, "Valid coordinates"
+                else:
+                    return False, "Coordinates must have maximum 5 decimal places"
+            else:
                 return False, "Coordinates must be within Rotterdam region"
-            
-            if len(str(lat).split('.')[-1]) > 5 or len(str(lon).split('.')[-1]) > 5:
-                return False, "Coordinates must have maximum 5 decimal places"
-            
-            return True, "Valid coordinates"
+                
         except ValueError:
             return False, "Invalid coordinate format"
 
@@ -123,16 +136,14 @@ class InputValidator:
             min_val = float(min_range)
             max_val = float(max_range)
             
-            if min_val < 0 or min_val > 100:
-                return False, "Minimum range must be between 0-100%"
-            
-            if max_val < 0 or max_val > 100:
-                return False, "Maximum range must be between 0-100%"
-            
-            if min_val >= max_val:
-                return False, "Minimum range must be less than maximum range"
-            
-            return True, "Valid target range"
+            if 0 <= min_val <= 100 and 0 <= max_val <= 100:
+                if min_val < max_val:
+                    return True, "Valid target range"
+                else:
+                    return False, "Minimum range must be less than maximum range"
+            else:
+                return False, "Range values must be between 0-100%"
+                
         except ValueError:
             return False, "Target range must be valid numbers"
 
@@ -152,15 +163,12 @@ class InputCollector:
                 attempts += 1
                 continue
             
-            # Check for suspicious input attempts (SQL injection, XSS, path traversal, etc.)
             from system_logging import detect_suspicious_input
-            if detect_suspicious_input(user_input):
-                # Log as suspicious activity and terminate session
+            if detect_suspicious_input(user_input, field_name):
                 from session_management import handle_suspicious_activity
                 terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {user_input}")
                 log_validation_failure(username, field_name, user_input, f"SUSPICIOUS: Malicious input pattern detected")
                 print("Bad input. Incident logged.")
-                # Exit the program immediately
                 import sys
                 sys.exit(0)
             
@@ -337,7 +345,6 @@ class InputCollector:
         )
 
     def get_coordinates(self, username="unknown", field_name="coordinates"):
-        """✅ C4 L3: Specialized input with custom validation"""
         print("Enter GPS coordinates for Rotterdam region:")
         
         while True:
@@ -349,9 +356,8 @@ class InputCollector:
                     print("Coordinates cannot be empty. Please try again.")
                     continue
                 
-                # Check for suspicious input
                 from system_logging import detect_suspicious_input
-                if detect_suspicious_input(lat_input) or detect_suspicious_input(lon_input):
+                if detect_suspicious_input(lat_input, field_name) or detect_suspicious_input(lon_input, field_name):
                     from session_management import handle_suspicious_activity
                     handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {lat_input}, {lon_input}")
                     print("Bad input. Incident logged.")
@@ -381,9 +387,8 @@ class InputCollector:
                     print("Both values are required. Please try again.")
                     continue
                 
-                # Check for suspicious input
                 from system_logging import detect_suspicious_input
-                if detect_suspicious_input(min_range) or detect_suspicious_input(max_range):
+                if detect_suspicious_input(min_range, field_name) or detect_suspicious_input(max_range, field_name):
                     from session_management import handle_suspicious_activity
                     handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {min_range}, {max_range}")
                     print("Bad input. Incident logged.")
@@ -431,9 +436,8 @@ class InputCollector:
         while True:
             response = input(f"{prompt} (y/n): ").strip().lower()
             
-            # Check for suspicious input
             from system_logging import detect_suspicious_input
-            if detect_suspicious_input(response):
+            if detect_suspicious_input(response, field_name):
                 from session_management import handle_suspicious_activity
                 terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {response}")
                 print("Bad input. Incident logged.")
@@ -455,9 +459,8 @@ class InputCollector:
                     print("Please enter a choice.")
                     continue
                 
-                # Check for suspicious input
                 from system_logging import detect_suspicious_input
-                if detect_suspicious_input(choice):
+                if detect_suspicious_input(choice, field_name):
                     from session_management import handle_suspicious_activity
                     terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {choice}")
                     print("Bad input. Incident logged.")
