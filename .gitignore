@@ -12,3 +12,5 @@ __pycache__/
 *.pyzwzw
 *.pyzwzwz
 *.zip
+encrypted_logs.txt
+urban_mobility.db
