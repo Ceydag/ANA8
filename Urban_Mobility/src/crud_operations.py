@@ -54,44 +54,6 @@ def create_user(user_data, current_user):
         if conn:
             close_connection(conn)
 
-def update_user(username, update_data, current_user):
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        encrypted_fields = ['username', 'first_name', 'last_name']
-        set_clauses = []
-        values = []
-        
-        for field, value in update_data.items():
-            if field in encrypted_fields:
-                encrypted_value = encrypt_data(str(value))
-                set_clauses.append(f"{field} = ?")
-                values.append(encrypted_value)
-            else:
-                set_clauses.append(f"{field} = ?")
-                values.append(value)
-        
-        values.append(username)
-        
-        query = f"UPDATE Users SET {', '.join(set_clauses)} WHERE username = ?"
-        cursor.execute(query, values)
-        
-        if cursor.rowcount > 0:
-            conn.commit()
-            close_connection(conn)
-            
-            updated_fields = ', '.join(update_data.keys())
-            log_action(current_user, f"Updated user {username}: {updated_fields}")
-            
-            return True
-        else:
-            close_connection(conn)
-            return False
-            
-    except Exception as e:
-        print(f"Error updating user: {e}")
-        return False
     
 def search_user(username):
     try:
@@ -151,7 +113,6 @@ def list_users(current_user):
         print(f"Error listing users: {e}")
 
 def list_system_admins(current_user):
-    """List only System Administrators with ID"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -194,7 +155,6 @@ def list_system_admins(current_user):
         print(f"Error listing system administrators: {e}")
 
 def list_service_engineers(current_user):
-    """List only Service Engineers with ID"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -236,7 +196,6 @@ def list_service_engineers(current_user):
         print(f"Error listing service engineers: {e}")
 
 def delete_user_by_id(user_id, current_user, allowed_role=None):
-    """Delete user by ID with security restrictions"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -310,7 +269,6 @@ def delete_user_by_id(user_id, current_user, allowed_role=None):
         close_connection(conn)
 
 def validate_user_exists_with_role(user_id, required_role):
-    """Validate that a user exists with the specified ID and role"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -350,130 +308,69 @@ def validate_user_exists_with_role(user_id, required_role):
     finally:
         close_connection(conn)
 
-def update_user_by_id(user_id, update_data, current_user, allowed_role=None):
-    """Update user by ID with security restrictions"""
-    conn = None
+def update_user_by_id(user_id, update_data, current_user, role):
+    from database import get_connection, close_connection
+    from encryption import encrypt_data, decrypt_data
+    
     try:
-        # First validate that user exists with correct role
-        if allowed_role:
-            is_valid, username, role = validate_user_exists_with_role(user_id, allowed_role)
-            if not is_valid:
-                return False
-        else:
-            # For cases without role restriction, just check if user exists
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
-            user_info = cursor.fetchone()
-            
-            if not user_info:
-                print(f"❌ ERROR: No user found with ID {user_id}")
-                print(f"   Please select a valid ID from the list above.")
-                return False
-            
-            username, role = user_info
-        
         conn = get_connection()
         cursor = conn.cursor()
         
-        # SECURITY CHECKS
+        cursor.execute('SELECT id, username, role FROM Users WHERE id = ?', (user_id,))
+        user = cursor.fetchone()
         
-        # 1. Never allow updating super_admin
-        if username == 'super_admin':
-            print("❌ ERROR: Cannot update super_admin account!")
-            log_action(current_user, f"Attempted to update super_admin - BLOCKED")
+        if not user:
+            print(f"ERROR: User with ID {user_id} not found.")
             return False
         
-        # 2. Check if current user can update this role
-        if allowed_role and role != allowed_role:
-            # Decrypt username for better error message
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
+        if user[2] != role:
+            print(f"ERROR: User with ID {user_id} is not a {role}.")
+            return False
+        
+        if 'username' in update_data:
+            new_username = update_data['username']
+            encrypted_new_username = encrypt_data(new_username)
             
-            print(f"❌ ERROR: User ID {user_id} is a {role}, but you can only update {allowed_role} users!")
-            print(f"   User: {decrypted_username}")
-            log_action(current_user, f"Attempted to update {role} user {decrypted_username} - BLOCKED (wrong role)")
-            return False
-        
-        # 2.5. Additional check: Ensure the user is actually in the allowed role list
-        if allowed_role == "System Admin" and role != "System Admin":
-            # Decrypt username for better error message
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
+            cursor.execute('SELECT id FROM Users WHERE username = ? AND id != ?', 
+                         (encrypted_new_username, user_id))
+            existing_user = cursor.fetchone()
             
-            print(f"❌ ERROR: User ID {user_id} is not a System Administrator!")
-            print(f"   User: {decrypted_username} ({role})")
-            print(f"   Please select a System Administrator from the list above.")
-            log_action(current_user, f"Attempted to update non-System Admin user {decrypted_username} (ID {user_id}) - BLOCKED")
-            return False
+            if existing_user:
+                print(f"ERROR: Username '{new_username}' is already taken.")
+                return False
         
-        if allowed_role == "Service Engineer" and role != "Service Engineer":
-            # Decrypt username for better error message
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
-            
-            print(f"❌ ERROR: User ID {user_id} is not a Service Engineer!")
-            print(f"   User: {decrypted_username} ({role})")
-            print(f"   Please select a Service Engineer from the list above.")
-            log_action(current_user, f"Attempted to update non-Service Engineer user {decrypted_username} (ID {user_id}) - BLOCKED")
-            return False
-        
-        # 3. Additional security: Prevent updating other System Admins by System Admins
-        if current_user != 'super_admin' and role == 'System Admin':
-            # Decrypt username for better error message
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
-            
-            print("❌ ERROR: Only Super Admin can update System Administrators!")
-            print(f"   User: {decrypted_username}")
-            log_action(current_user, f"Attempted to update System Admin {decrypted_username} - BLOCKED (insufficient privileges)")
-            return False
-        
-        # Encrypt fields that need encryption
-        encrypted_fields = ['username', 'first_name', 'last_name']
-        for field in encrypted_fields:
-            if field in update_data:
-                update_data[field] = encrypt_data(update_data[field])
-        
-        # Build update query
         set_clauses = []
         values = []
         
         for field, value in update_data.items():
-            set_clauses.append(f"{field} = ?")
-            values.append(value)
+            if field == 'username':
+                set_clauses.append('username = ?')
+                values.append(encrypt_data(value))
+            elif field == 'first_name':
+                set_clauses.append('first_name = ?')
+                values.append(encrypt_data(value))
+            elif field == 'last_name':
+                set_clauses.append('last_name = ?')
+                values.append(encrypt_data(value))
+        
+        if not set_clauses:
+            print("ERROR: No valid fields to update.")
+            return False
         
         values.append(user_id)
+        query = f'UPDATE Users SET {", ".join(set_clauses)} WHERE id = ?'
         
-        query = f"UPDATE Users SET {', '.join(set_clauses)} WHERE id = ?"
         cursor.execute(query, values)
+        conn.commit()
         
-        if cursor.rowcount > 0:
-            conn.commit()
-            # Decrypt username for logging
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
-            
-            updated_fields = ', '.join(update_data.keys())
-            log_action(current_user, f"Updated {role} user {decrypted_username}: {updated_fields}")
-            print(f"✅ User {decrypted_username} ({role}) updated successfully!")
-            return True
-        else:
-            print(f"Failed to update user with ID {user_id}")
-            return False
-            
+        from system_logging import log_action
+        log_action(current_user, f"Updated {role} with ID {user_id}")
+        
+        print(f"✅ {role} updated successfully!")
+        return True
+        
     except Exception as e:
-        print(f"Error updating user: {e}")
+        print(f"ERROR updating user: {e}")
         return False
     finally:
         close_connection(conn)

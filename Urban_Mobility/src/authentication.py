@@ -2,8 +2,8 @@ import sqlite3
 import bcrypt
 import getpass
 from database import get_connection, close_connection
-from system_logging import log_login_attempt, detect_suspicious_patterns, log_action
-from session_management import create_session, check_session, terminate_session, display_session_info
+from system_logging import log_login_attempt, log_action
+from session_management import create_session, terminate_session
 
 def hash_password(password):
     salt = bcrypt.gensalt()
@@ -17,34 +17,46 @@ def authenticate_user(username, password):
     cursor = conn.cursor()
     
     try:
-        cursor.execute('SELECT password_hash, role FROM Users WHERE username = ?', (username,))
-        result = cursor.fetchone()
+        from encryption import decrypt_data
         
-        if result:
-            if username == 'super_admin' and password == 'Admin_123?':
-                log_login_attempt(username, True)
-                # REQUIREMENT: Session management - create session on successful login
-                create_session(username, result[1])
-                return result[1]  
-            elif verify_password(result[0], password):
-                log_login_attempt(username, True)
-                # REQUIREMENT: Session management - create session on successful login
-                create_session(username, result[1])
-                return result[1]  
+        cursor.execute('SELECT username, password_hash, role FROM Users')
+        all_users = cursor.fetchall()
         
-        # Failed login attempt
+        for db_username, stored_password_hash, role in all_users:
+            try:
+                decrypted_username = decrypt_data(db_username)
+                
+                if db_username == 'super_admin' or decrypted_username == 'super_admin':
+                    if username == 'super_admin' and password == 'Admin_123?':
+                        log_login_attempt(username, True)
+                        create_session(username, role)
+                        return username, role
+                
+                if decrypted_username.lower() == username.lower():
+                    if verify_password(stored_password_hash, password):
+                        log_login_attempt(username, True)
+                        create_session(username, role)
+                        return username, role
+                    else:
+                        break
+                        
+            except Exception as decrypt_error:
+                if db_username == username and username == 'super_admin' and password == 'Admin_123?':
+                    log_login_attempt(username, True)
+                    create_session(username, role)
+                    return username, role
+        
         log_login_attempt(username, False)
-        return None
+        return None, None
+        
     except Exception as e:
         print(f"Authentication error: {e}")
         log_action("system", f"Authentication error for user {username}", str(e), True)
-        return None
+        return None, None
     finally:
         close_connection(conn)
 
 def logout_user(username):
-    """Logout user and terminate session"""
-    # REQUIREMENT: Session management - terminate session on logout
     if terminate_session(username, "User logout"):
         log_action(username, "User logged out", "Session terminated by user")
         return True
@@ -55,8 +67,9 @@ def login():
     username = input("Enter username: ").strip()
     password = getpass.getpass("Enter password: ")
     
-    role = authenticate_user(username, password)
-    if role:
+    auth_result = authenticate_user(username, password)
+    if auth_result and auth_result[0]:
+        username, role = auth_result
         print(f"Login successful! Welcome, {username} ({role})")
         return username, role
     else:

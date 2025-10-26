@@ -1,16 +1,11 @@
-"""
-Database module for Urban Mobility Backend System
-Handles SQLite3 database initialization and table creation
-"""
-
 import sqlite3
 import os
 from encryption import encrypt_data, decrypt_data
 
-def initialize_db():
-    """Initialize the SQLite database with required tables"""
-  
-    db_path = 'src/urban_mobility.db'
+def initialize_db(): 
+    db_path = 'urban_mobility.db'
+
+    db_already_exists = os.path.exists(db_path)
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -80,6 +75,9 @@ def initialize_db():
     )
     ''')
 
+    cursor.execute("SELECT COUNT(*) FROM Users WHERE username = 'super_admin'")
+    admin_already_exists = cursor.fetchone()[0] > 0
+
     import bcrypt
     salt = bcrypt.gensalt()
     super_admin_password = bcrypt.hashpw('Admin_123?'.encode('utf-8'), salt)
@@ -87,26 +85,24 @@ def initialize_db():
     INSERT OR IGNORE INTO Users (username, password_hash, role, first_name, last_name, registration_date)
     VALUES (?, ?, ?, ?, ?, datetime('now'))
     ''', ('super_admin', super_admin_password, 'Super Admin', 'Super', 'Administrator'))
+
     
     conn.commit()
     conn.close()
-    
-    print("Database initialized successfully!")
-    print("Super Admin account created:")
-    print("  Username: super_admin")
-    print("  Password: Admin_123?")
+
+    if not db_already_exists or not admin_already_exists:
+        print("Database initialized successfully!")
+        print("Super Admin account created")
 
 def get_connection():
-    """Get database connection with timeout and better error handling"""
     try:
-        # Check if database exists in src directory, otherwise look in current directory
         import os
         if os.path.exists('src/urban_mobility.db'):
             db_path = 'src/urban_mobility.db'
         elif os.path.exists('urban_mobility.db'):
             db_path = 'urban_mobility.db'
         else:
-            db_path = 'src/urban_mobility.db'  # Default to src directory
+            db_path = 'src/urban_mobility.db' 
         
         conn = sqlite3.connect(db_path, timeout=30.0)
         conn.execute('PRAGMA busy_timeout=30000')
@@ -116,7 +112,6 @@ def get_connection():
         return None
 
 def close_connection(conn):
-    """Close database connection with proper error handling"""
     if conn:
         try:
             conn.close()
@@ -124,7 +119,6 @@ def close_connection(conn):
             print(f"Error closing database connection: {e}")
 
 def unlock_database():
-    """Attempt to unlock the database by closing any lingering connections"""
     try:
         conn = sqlite3.connect('urban_mobility.db', timeout=5.0)
         conn.close()

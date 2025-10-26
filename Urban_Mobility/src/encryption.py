@@ -3,7 +3,8 @@ import base64
 import os
 
 def get_or_create_key():
-    key_file = 'src/encryption.key'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    key_file = os.path.join(script_dir, 'encryption.key')
     
     if os.path.exists(key_file):
         with open(key_file, 'rb') as f:
