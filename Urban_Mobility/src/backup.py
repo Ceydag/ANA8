@@ -164,6 +164,16 @@ def revoke_restore_code(restore_code):
         conn = get_connection()
         cursor = conn.cursor()
         
+        # First check if the restore code exists
+        cursor.execute('SELECT code FROM RestoreCodes WHERE code = ?', (restore_code,))
+        existing_code = cursor.fetchone()
+        
+        if not existing_code:
+            print(f"Restore code {restore_code} does not exist")
+            close_connection(conn)
+            return False
+        
+        # Delete the restore code
         cursor.execute('DELETE FROM RestoreCodes WHERE code = ?', (restore_code,))
         conn.commit()
         close_connection(conn)
@@ -197,8 +207,15 @@ def list_restore_codes():
         print("-" * 80)
         
         for code, admin, backup, created, used in results:
+            # Decrypt the admin username for display
+            try:
+                decrypted_admin = decrypt_data(admin)
+            except:
+                # If decryption fails, use the original (might be non-encrypted like super_admin)
+                decrypted_admin = admin
+            
             status = "Yes" if used else "No"
-            print(f"{code:<10} {admin:<15} {backup:<20} {created:<20} {status:<5}")
+            print(f"{code:<10} {decrypted_admin:<15} {backup:<20} {created:<20} {status:<5}")
         
     except Exception as e:
         print(f"Error listing restore codes: {e}")

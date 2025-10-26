@@ -159,6 +159,22 @@ def handle_suspicious_activity(username, activity_description):
 
 
 
+def update_session_username(old_username, new_username):
+    """Update the username in the session when user changes their username"""
+    if old_username in sessions:
+        session = sessions[old_username]
+        # Update the session's username
+        session.username = new_username
+        
+        # Update the sessions dictionary to use the new username as key
+        sessions[new_username] = session
+        del sessions[old_username]
+        
+        log_action(new_username, "Username updated in session", f"Changed from {old_username} to {new_username}")
+        return True
+    return False
+
+
 def get_current_user_id(username):
     """Get the user ID for the current user from the database"""
     try:

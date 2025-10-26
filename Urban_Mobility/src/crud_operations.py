@@ -317,11 +317,11 @@ def update_user_by_id(user_id, update_data, current_user, role):
         
         if not user:
             print(f"No user found with ID {user_id}")
-            return False
+            return False, None
         
         if user[2] != role:
             print(f"No user found with ID {user_id}")
-            return False
+            return False, None
         
         if 'username' in update_data:
             new_username = update_data['username']
@@ -336,12 +336,12 @@ def update_user_by_id(user_id, update_data, current_user, role):
                     decrypted_username = decrypt_data(existing_username)
                     if decrypted_username.lower() == new_username.lower():
                         print(f"ERROR: Username '{new_username}' is already taken.")
-                        return False
+                        return False, None
                 except:
                     # If decryption fails, check if it's a non-encrypted username (like super_admin)
                     if existing_username.lower() == new_username.lower():
                         print(f"ERROR: Username '{new_username}' is already taken.")
-                        return False
+                        return False, None
         
         set_clauses = []
         values = []
@@ -359,7 +359,7 @@ def update_user_by_id(user_id, update_data, current_user, role):
         
         if not set_clauses:
             print("ERROR: No valid fields to update.")
-            return False
+            return False, None
         
         values.append(user_id)
         query = f'UPDATE Users SET {", ".join(set_clauses)} WHERE id = ?'
@@ -367,15 +367,22 @@ def update_user_by_id(user_id, update_data, current_user, role):
         cursor.execute(query, values)
         conn.commit()
         
+        # If username was updated, update the session as well
+        new_username = None
+        if 'username' in update_data:
+            from session_management import update_session_username
+            new_username = update_data['username']
+            update_session_username(current_user, new_username)
+        
         from system_logging import log_action
         log_action(current_user, f"Updated {role} with ID {user_id}")
         
         print(f"✅ {role} updated successfully!")
-        return True
+        return True, new_username
         
     except Exception as e:
         print(f"ERROR updating user: {e}")
-        return False
+        return False, None
     finally:
         close_connection(conn)
 

@@ -155,7 +155,7 @@ def system_admin_menu(username):
         if choice == 1:
             change_password(username)
         elif choice == 2:
-            update_my_account_menu(username)
+            username = update_my_account_menu(username)
         elif choice == 3:
             delete_my_account_menu(username)
         elif choice == 4:
@@ -345,7 +345,7 @@ def update_my_account_menu(current_user):
     
     if not user_id:
         print("ERROR: Could not find your user account in session.")
-        return
+        return current_user
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -355,7 +355,7 @@ def update_my_account_menu(current_user):
     
     if not user_data:
         print("ERROR: Could not find your user account in database.")
-        return
+        return current_user
     
     user_role = user_data[0]
     
@@ -375,7 +375,8 @@ def update_my_account_menu(current_user):
         new_first = collector.get_first_name(username=current_user, field_name="first_name")
         if new_first:
             update_data = {"first_name": new_first}
-            if update_user_by_id(user_id, update_data, current_user, user_role):
+            success, _ = update_user_by_id(user_id, update_data, current_user, user_role)
+            if success:
                 print("First name updated successfully!")
             else:
                 print("Failed to update first name.")
@@ -387,7 +388,8 @@ def update_my_account_menu(current_user):
         new_last = collector.get_last_name(username=current_user, field_name="last_name")
         if new_last:
             update_data = {"last_name": new_last}
-            if update_user_by_id(user_id, update_data, current_user, user_role):
+            success, _ = update_user_by_id(user_id, update_data, current_user, user_role)
+            if success:
                 print("Last name updated successfully!")
             else:
                 print("Failed to update last name.")
@@ -399,9 +401,12 @@ def update_my_account_menu(current_user):
         new_user = collector.get_username()
         if new_user:
             update_data = {"username": new_user}
-            if update_user_by_id(user_id, update_data, current_user, user_role):
+            success, new_username = update_user_by_id(user_id, update_data, current_user, user_role)
+            if success:
                 print("Username updated successfully!")
                 print("NOTE: You will need to use your new username for future logins.")
+                # Return the new username so the calling function can update its reference
+                return new_username
             else:
                 print("Failed to update username.")
         else:
@@ -409,10 +414,12 @@ def update_my_account_menu(current_user):
     
     elif choice == 4:
         print("Update cancelled.")
-        return
+        return current_user
     
     else:
         print("Invalid field selection. Please choose 1-4.")
+    
+    return current_user
 
 def manage_service_engineers(username):
     while True:
