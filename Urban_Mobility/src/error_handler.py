@@ -1,4 +1,3 @@
-import sqlite3
 import sys
 from system_logging import log_action
 from datetime import datetime

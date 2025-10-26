@@ -1,10 +1,9 @@
 import zipfile
 import os
-import sqlite3
 from datetime import datetime
 import uuid
 from database import get_connection, close_connection
-from encryption import encrypt_data, decrypt_data
+from encryption import decrypt_data
 
 def create_backup():
     try:
@@ -35,20 +34,17 @@ def generate_restore_code(system_admin_username, backup_filename):
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Search for user by decrypting all usernames (since usernames are stored encrypted)
         cursor.execute('SELECT id, username, role FROM Users')
         all_users = cursor.fetchall()
         
         user_found = None
         for user_id, encrypted_username, role in all_users:
             try:
-                # Try to decrypt the username
                 decrypted_username = decrypt_data(encrypted_username)
                 if decrypted_username == system_admin_username:
                     user_found = (user_id, encrypted_username, role)
                     break
             except:
-                # If decryption fails, check if it's a non-encrypted username (like super_admin)
                 if encrypted_username == system_admin_username:
                     user_found = (user_id, encrypted_username, role)
                     break
@@ -87,20 +83,17 @@ def restore_backup(restore_code, username):
         conn = get_connection()
         cursor = conn.cursor()
         
-        # First, find the encrypted username for the current user
         cursor.execute('SELECT id, username, role FROM Users')
         all_users = cursor.fetchall()
         
         encrypted_username = None
         for user_id, encrypted_user, role in all_users:
             try:
-                # Try to decrypt the username
                 decrypted_user = decrypt_data(encrypted_user)
                 if decrypted_user == username:
                     encrypted_username = encrypted_user
                     break
             except:
-                # If decryption fails, check if it's a non-encrypted username (like super_admin)
                 if encrypted_user == username:
                     encrypted_username = encrypted_user
                     break
@@ -109,7 +102,6 @@ def restore_backup(restore_code, username):
             print("User not found")
             return False
         
-        # Now search for the restore code with the encrypted username
         cursor.execute('''
         SELECT backup_filename, system_admin_username, used 
         FROM RestoreCodes 
@@ -164,7 +156,6 @@ def revoke_restore_code(restore_code):
         conn = get_connection()
         cursor = conn.cursor()
         
-        # First check if the restore code exists
         cursor.execute('SELECT code FROM RestoreCodes WHERE code = ?', (restore_code,))
         existing_code = cursor.fetchone()
         
@@ -173,7 +164,6 @@ def revoke_restore_code(restore_code):
             close_connection(conn)
             return False
         
-        # Delete the restore code
         cursor.execute('DELETE FROM RestoreCodes WHERE code = ?', (restore_code,))
         conn.commit()
         close_connection(conn)
@@ -207,11 +197,9 @@ def list_restore_codes():
         print("-" * 80)
         
         for code, admin, backup, created, used in results:
-            # Decrypt the admin username for display
             try:
                 decrypted_admin = decrypt_data(admin)
             except:
-                # If decryption fails, use the original (might be non-encrypted like super_admin)
                 decrypted_admin = admin
             
             status = "Yes" if used else "No"

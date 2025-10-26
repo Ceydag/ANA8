@@ -1,4 +1,3 @@
-import os
 import sys
 from database import initialize_db
 from authentication import login, change_password, logout_user
@@ -10,7 +9,6 @@ from crud_operations import *
 from input_validation import collector, validator
 
 def get_validated_id(prompt, entity_name):
-    """Get and validate an ID input with suspicious activity detection"""
     return collector.get_validated_input(
         prompt,
         lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
@@ -36,7 +34,6 @@ def main():
     if username is None and role is None:
         return
     
-    # Only show suspicious activity alert for System Admins and Super Admins
     if role in ["System Admin", "Super Admin"]:
         suspicious_count = get_unread_suspicious_count(username)
         if suspicious_count > 0:
@@ -48,7 +45,6 @@ def main():
     safe_execute(_main_loop, username, "Main System Loop", username, role)
 
 def _main_loop(username, role):
-    """The actual main loop without exception handling"""
     while True:
         if role == "Super Admin":
             result = super_admin_menu(username)
@@ -405,7 +401,6 @@ def update_my_account_menu(current_user):
             if success:
                 print("Username updated successfully!")
                 print("NOTE: You will need to use your new username for future logins.")
-                # Return the new username so the calling function can update its reference
                 return new_username
             else:
                 print("Failed to update username.")
@@ -1502,20 +1497,17 @@ def add_service_engineer(current_user):
             conn = get_connection()
             cursor = conn.cursor()
             
-            # Check for existing username by decrypting all usernames
             cursor.execute('SELECT id, username FROM Users')
             all_users = cursor.fetchall()
             
             existing_user = None
             for existing_id, existing_username in all_users:
                 try:
-                    # Try to decrypt the username
                     decrypted_username = decrypt_data(existing_username)
                     if decrypted_username.lower() == username.lower():
                         existing_user = (existing_id, existing_username)
                         break
                 except:
-                    # If decryption fails, check if it's a non-encrypted username (like super_admin)
                     if existing_username.lower() == username.lower():
                         existing_user = (existing_id, existing_username)
                         break
@@ -1599,12 +1591,10 @@ def delete_my_account_menu(current_user):
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Try direct lookup first (for non-encrypted users like super_admin)
     cursor.execute('SELECT id, role FROM Users WHERE username = ?', (current_user,))
     user_data = cursor.fetchone()
     
     if not user_data:
-        # If not found, search through all encrypted users
         from encryption import decrypt_data
         cursor.execute('SELECT id, username, role FROM Users')
         all_users = cursor.fetchall()
@@ -1616,7 +1606,6 @@ def delete_my_account_menu(current_user):
                     user_data = (user_id, role)
                     break
             except:
-                # Skip if decryption fails
                 continue
     
     close_connection(conn)
@@ -1627,7 +1616,6 @@ def delete_my_account_menu(current_user):
     
     user_id, user_role = user_data
     
-    # Prevent Super Admin from deleting their own account
     if user_role == "Super Admin":
         print("ERROR: Operation not permitted.")
         print("This is a security measure to prevent system lockout.")
@@ -1748,7 +1736,6 @@ def reset_system_admin_password_menu():
         print("   Cannot reset passwords when none exist.")
         return
     
-    # Show list of System Admins
     list_system_admins("super_admin")
     
     print("\nEnter the ID of the System Administrator to reset password:")
@@ -1761,13 +1748,11 @@ def reset_system_admin_password_menu():
     try:
         user_id = int(user_id)
         
-        # Validate that the user exists and is a System Admin
         from crud_operations import validate_user_exists_with_role
         is_valid, username, role = validate_user_exists_with_role(user_id, "System Admin")
         if not is_valid:
             return
         
-        # Confirm the action
         print(f"\nWARNING: This will reset the password for System Admin ID {user_id}")
         print("A temporary password will be generated and the user must change it on next login.")
         
@@ -1776,7 +1761,6 @@ def reset_system_admin_password_menu():
             print("Password reset cancelled.")
             return
         
-        # Reset the password
         if reset_user_password(user_id, "super_admin"):
             print("\nPassword reset completed successfully!")
         else:
@@ -1808,7 +1792,6 @@ def reset_service_engineer_password_menu():
         print("   Cannot reset passwords when none exist.")
         return
     
-    # Show list of Service Engineers
     list_service_engineers("super_admin")
     
     print("\nEnter the ID of the Service Engineer to reset password:")
@@ -1821,13 +1804,11 @@ def reset_service_engineer_password_menu():
     try:
         user_id = int(user_id)
         
-        # Validate that the user exists and is a Service Engineer
         from crud_operations import validate_user_exists_with_role
         is_valid, username, role = validate_user_exists_with_role(user_id, "Service Engineer")
         if not is_valid:
             return
         
-        # Confirm the action
         print(f"\nWARNING: This will reset the password for Service Engineer ID {user_id}")
         print("A temporary password will be generated and the user must change it on next login.")
         
@@ -1836,7 +1817,6 @@ def reset_service_engineer_password_menu():
             print("Password reset cancelled.")
             return
         
-        # Reset the password
         if reset_user_password(user_id, "super_admin"):
             print("\nPassword reset completed successfully!")
         else:
@@ -1872,7 +1852,6 @@ def generate_restore_code_menu(username):
     print("Select a System Administrator for the restore code:")
     print()
     
-    # Get list of System Administrators
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -1892,7 +1871,6 @@ def generate_restore_code_menu(username):
             print("Note: Super Admin account cannot be used for restore codes.")
             return
         
-        # Display System Administrators
         print("Available System Administrators:")
         print("-" * 60)
         print(f"{'No.':<4} {'ID':<5} {'Username':<15} {'Name':<25}")
@@ -1914,7 +1892,6 @@ def generate_restore_code_menu(username):
         
         print("-" * 60)
         
-        # Get user selection
         choice = collector.get_validated_input(
             f"Select System Administrator (1-{len(system_admins)}): ",
             lambda x: (x.isdigit() and 1 <= int(x) <= len(system_admins), f"Please enter a number between 1 and {len(system_admins)}") if x.isdigit() and 1 <= int(x) <= len(system_admins) else (False, f"Please enter a number between 1 and {len(system_admins)}"),
@@ -1934,7 +1911,6 @@ def generate_restore_code_menu(username):
         print(f"Error retrieving System Administrators: {e}")
         return
     
-    # Get backup files
     backup_files = list_backups()
     if not backup_files:
         print("No backup files found. Create a backup first.")

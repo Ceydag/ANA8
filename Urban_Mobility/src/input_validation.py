@@ -152,15 +152,12 @@ class InputCollector:
                 attempts += 1
                 continue
             
-            # Check for suspicious input attempts (SQL injection, XSS, path traversal, etc.)
             from system_logging import detect_suspicious_input
             if detect_suspicious_input(user_input):
-                # Log as suspicious activity and terminate session
                 from session_management import handle_suspicious_activity
                 terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {user_input}")
                 log_validation_failure(username, field_name, user_input, f"SUSPICIOUS: Malicious input pattern detected")
                 print("Bad input. Incident logged.")
-                # Exit the program immediately
                 import sys
                 sys.exit(0)
             
@@ -337,7 +334,6 @@ class InputCollector:
         )
 
     def get_coordinates(self, username="unknown", field_name="coordinates"):
-        """✅ C4 L3: Specialized input with custom validation"""
         print("Enter GPS coordinates for Rotterdam region:")
         
         while True:
@@ -349,7 +345,6 @@ class InputCollector:
                     print("Coordinates cannot be empty. Please try again.")
                     continue
                 
-                # Check for suspicious input
                 from system_logging import detect_suspicious_input
                 if detect_suspicious_input(lat_input) or detect_suspicious_input(lon_input):
                     from session_management import handle_suspicious_activity
@@ -381,7 +376,6 @@ class InputCollector:
                     print("Both values are required. Please try again.")
                     continue
                 
-                # Check for suspicious input
                 from system_logging import detect_suspicious_input
                 if detect_suspicious_input(min_range) or detect_suspicious_input(max_range):
                     from session_management import handle_suspicious_activity
@@ -431,7 +425,6 @@ class InputCollector:
         while True:
             response = input(f"{prompt} (y/n): ").strip().lower()
             
-            # Check for suspicious input
             from system_logging import detect_suspicious_input
             if detect_suspicious_input(response):
                 from session_management import handle_suspicious_activity
@@ -455,7 +448,6 @@ class InputCollector:
                     print("Please enter a choice.")
                     continue
                 
-                # Check for suspicious input
                 from system_logging import detect_suspicious_input
                 if detect_suspicious_input(choice):
                     from session_management import handle_suspicious_activity
