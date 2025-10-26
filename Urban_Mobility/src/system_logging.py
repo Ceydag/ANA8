@@ -476,42 +476,26 @@ def log_validation_failure(username, field_name, input_value, error_message, is_
     log_action(username, log_entry, additional_info, suspicious_flag or is_suspicious)
 
 def detect_suspicious_input(input_value, field_name="unknown"):
-    """
-    Context-aware suspicious input detection
-    Blocks XSS, path traversal, and event handler injection
-    Allows legitimate apostrophes in names (SQL injection protected by prepared statements)
-    """
     input_str = str(input_value).strip()
     
-    # Always block these patterns regardless of context
     always_suspicious_patterns = [
-        r"(<script|<iframe|<object|<embed|javascript:)",  # XSS attempts
-        r"(onload|onerror|onclick|onfocus)",  # Event handlers
-        r"(\.\./|\.\.\\|%2e%2e)",  # Path traversal
+        r"(<script|<iframe|<object|<embed|javascript:)", 
+        r"(onload|onerror|onclick|onfocus)",
+        r"(\.\./|\.\.\\|%2e%2e)",
     ]
     
-    # Check always suspicious patterns first
     for pattern in always_suspicious_patterns:
         if re.search(pattern, input_str, re.IGNORECASE):
             return True
     
-    # Context-aware apostrophe detection
     if "'" in input_str or '"' in input_str:
-        # For name fields, allow single apostrophes in legitimate positions
         if field_name in ['first_name', 'last_name', 'name']:
-            # Allow apostrophes in names (O'Reilly, D'Angelo, etc.)
-            # No SQL injection patterns to check since we use prepared statements
             return False
         
-        # For non-name fields, be more strict with quotes
         else:
-            # Block quotes in fields that shouldn't have them
             if field_name in ['email', 'phone', 'zip_code', 'driving_license', 'serial_number']:
-                # These fields shouldn't have quotes at all
                 return True
             
-            # For other fields, allow quotes since we use prepared statements
-            # No SQL injection patterns to check
             return False
     
     return False
