@@ -142,19 +142,6 @@ def display_session_info(username):
     if info['suspicious_activity'] > 0:
         print(f"Suspicious activities: {info['suspicious_activity']}/3")
 
-def handle_invalid_input(username, input_value, field_name):
-    session = get_session_by_username(username)
-    if not session:
-        return False, "No active session"
-    
-    log_action(username, "Invalid input detected", f"Field: {field_name}, Input: {input_value[:50]}...")
-    
-    should_terminate, message = session.add_invalid_attempt()
-    if should_terminate:
-        terminate_session(username, message)
-        return True, message
-    
-    return False, message
 
 def handle_suspicious_activity(username, activity_description):
     session = get_session_by_username(username)
@@ -170,24 +157,7 @@ def handle_suspicious_activity(username, activity_description):
     
     return False, message
 
-def cleanup_expired_sessions():
-    expired_users = []
-    for username, session in sessions.items():
-        is_expired, _ = session.is_expired()
-        if is_expired:
-            expired_users.append(username)
-    
-    for username in expired_users:
-        terminate_session(username, "Session expired during cleanup")
-    
-    return len(expired_users)
 
-def get_active_sessions():
-    active_sessions = []
-    for username, session in sessions.items():
-        if session.is_active:
-            active_sessions.append(session.get_session_info())
-    return active_sessions
 
 def get_current_user_id(username):
     """Get the user ID for the current user from the database"""
@@ -222,15 +192,4 @@ def get_current_user_id(username):
         print(f"Error getting user ID: {e}")
         return None
 
-def force_logout_user(username, reason="Forced logout by administrator"):
-    if username in sessions:
-        terminate_session(username, reason)
-        return True
-    return False
 
-def force_logout_all(reason="System maintenance"):
-    count = 0
-    for username in list(sessions.keys()):
-        if terminate_session(username, reason):
-            count += 1
-    return count

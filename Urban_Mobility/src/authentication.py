@@ -101,6 +101,12 @@ def change_temp_password(username):
     print("\n=== CHANGE TEMPORARY PASSWORD ===")
     print("You are changing your temporary password.")
     print("Please enter a new secure password.")
+    print("\nPassword Requirements:")
+    print("• Length: 12-30 characters")
+    print("• Must contain at least one lowercase letter (a-z)")
+    print("• Must contain at least one uppercase letter (A-Z)")
+    print("• Must contain at least one digit (0-9)")
+    print("• Must contain at least one special character (~!@#$%&_-+=`|\\(){}[]:;'<>,.?/)")
     
     new_password = getpass.getpass("Enter new password: ")
     confirm_password = getpass.getpass("Confirm new password: ")
@@ -114,10 +120,9 @@ def change_temp_password(username):
         return False
     
     # Validate password strength
-    from input_validation import validator
-    is_valid, message = validator.validate_pattern(new_password, 'password', 'password')
-    if not is_valid:
-        print(f"Password validation failed: {message}")
+    if not validate_password(new_password):
+        print("Password validation failed: Invalid password format")
+        print("Please ensure your password meets all the requirements listed above.")
         return False
     
     # Hash and update password
@@ -171,6 +176,13 @@ def change_password(username):
             print("Current password is incorrect.")
             return False
         
+        print("\nPassword Requirements:")
+        print("• Length: 12-30 characters")
+        print("• Must contain at least one lowercase letter (a-z)")
+        print("• Must contain at least one uppercase letter (A-Z)")
+        print("• Must contain at least one digit (0-9)")
+        print("• Must contain at least one special character (~!@#$%&_-+=`|\\(){}[]:;'<>,.?/)")
+        
         new_password = getpass.getpass("Enter new password: ")
         confirm_password = getpass.getpass("Confirm new password: ")
         
@@ -179,7 +191,8 @@ def change_password(username):
             return False
         
         if not validate_password(new_password):
-            print("Password does not meet requirements.")
+            print("Password validation failed: Invalid password format")
+            print("Please ensure your password meets all the requirements listed above.")
             return False
    
         hashed_password = hash_password(new_password)

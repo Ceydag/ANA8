@@ -74,22 +74,6 @@ def create_user(user_data, current_user):
             close_connection(conn)
 
     
-def search_user(username):
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT username, role FROM Users WHERE username = ?
-        ''', (username,))
-        
-        user = cursor.fetchone()
-        close_connection(conn)
-        return user
-        
-    except Exception as e:
-        print(f"Error searching user: {e}")
-        return None
 
 def list_users(current_user):
     try:
@@ -555,25 +539,6 @@ def check_temp_password(username):
         print(f"Error checking temp password: {e}")
         return False
 
-def delete_user(username, current_user):
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM Users WHERE username = ?', (username,))
-        
-        if cursor.rowcount > 0:
-            conn.commit()
-            close_connection(conn)
-            log_action(current_user, f"Deleted user: {username}")
-            return True
-        else:
-            close_connection(conn)
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting user: {e}")
-        return False
 
 
 def create_traveller(traveller_data):

@@ -4,16 +4,21 @@ from database import initialize_db
 from authentication import login, change_password, logout_user
 from session_management import check_session, display_session_info
 from error_handler import safe_execute
-from system_logging import log_action, check_suspicious_activities
+from system_logging import log_action, get_unread_suspicious_count
 from backup import create_backup, generate_restore_code, restore_backup, list_backups, revoke_restore_code, list_restore_codes
 from crud_operations import *
 from input_validation import collector, validator
 
-def exit_system(username):
-    print("\nExiting Urban Mobility Backend System...")
-    log_action(username, "System exit")
-    print("Thank you for using Urban Mobility Backend System!")
-    sys.exit(0)
+def get_validated_id(prompt, entity_name):
+    """Get and validate an ID input with suspicious activity detection"""
+    return collector.get_validated_input(
+        prompt,
+        lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
+        f"Invalid {entity_name.lower()} ID. Must be a number.",
+        username="unknown",
+        field_name=f"{entity_name.lower()}_id"
+    )
+
 
 def main():
     print("=" * 60)
@@ -33,7 +38,7 @@ def main():
     
     # Only show suspicious activity alert for System Admins and Super Admins
     if role in ["System Admin", "Super Admin"]:
-        suspicious_count = check_suspicious_activities()
+        suspicious_count = get_unread_suspicious_count(username)
         if suspicious_count > 0:
             print(f"\n ALERT: {suspicious_count} suspicious activities detected in the last 24 hours!")
             print("Please review the logs for details.")
@@ -261,16 +266,9 @@ def update_system_admin_menu(current_user):
     list_system_admins(current_user)
     
     print("\nEnter the ID of the System Administrator to update:")
-    user_id = input("User ID: ").strip()
-    
+    user_id = get_validated_id("User ID: ", "User")
     if not user_id:
         print("User ID is required.")
-        return
-    
-    try:
-        user_id = int(user_id)
-    except ValueError:
-        print("Invalid user ID. Please enter a number.")
         return
     
     from crud_operations import validate_user_exists_with_role
@@ -465,16 +463,9 @@ def update_service_engineer_menu(current_user):
     list_service_engineers(current_user)
     
     print("\nEnter the ID of the Service Engineer to update:")
-    user_id = input("User ID: ").strip()
-    
+    user_id = get_validated_id("User ID: ", "User")
     if not user_id:
         print("User ID is required.")
-        return
-    
-    try:
-        user_id = int(user_id)
-    except ValueError:
-        print("Invalid user ID. Please enter a number.")
         return
     
     from crud_operations import validate_user_exists_with_role
@@ -677,7 +668,7 @@ def add_traveller_menu(current_user):
         print("Driving license is required. Operation cancelled.")
         return
     
-    print("\n🔄 Creating traveller...")
+    print("\nCreating traveller...")
     if create_traveller(traveller_data):
         print("Traveller added successfully!")
     else:
@@ -700,13 +691,13 @@ def update_traveller_menu(current_user):
     close_connection(conn)
     
     if count == 0:
-        print("📋 No travellers found in the system.")
+        print("No travellers found in the system.")
         print("   Cannot update travellers when none exist.")
         return
     list_travellers()
     
     print("\nEnter the ID of the Traveller to update:")
-    traveller_id = input("Traveller ID: ").strip()
+    traveller_id = get_validated_id("Traveller ID: ", "Traveller")
     if not traveller_id:
         print("Traveller ID is required. Operation cancelled")
         return
@@ -995,13 +986,15 @@ def update_scooter_menu_service_engineer(username="unknown"):
     list_scooters()
     
     print("\nEnter the ID of the Scooter to update:")
-    scooter_id = input("Scooter ID: ").strip()
+    scooter_id = collector.get_validated_input(
+        "Scooter ID: ",
+        lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
+        "Invalid scooter ID. Must be a number.",
+        username="unknown",
+        field_name="scooter_id"
+    )
     if not scooter_id:
         print("Scooter ID is required. Operation cancelled")
-        return
-    
-    if not scooter_id.isdigit():
-        print("Invalid scooter ID. Must be a number.")
         return
     
     from crud_operations import update_scooter
@@ -1118,13 +1111,15 @@ def update_scooter_menu(username="unknown"):
     list_scooters()
     
     print("\nEnter the ID of the Scooter to update:")
-    scooter_id = input("Scooter ID: ").strip()
+    scooter_id = collector.get_validated_input(
+        "Scooter ID: ",
+        lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
+        "Invalid scooter ID. Must be a number.",
+        username="unknown",
+        field_name="scooter_id"
+    )
     if not scooter_id:
         print("Scooter ID is required. Operation cancelled")
-        return
-    
-    if not scooter_id.isdigit():
-        print("Invalid scooter ID. Must be a number.")
         return
     
     from crud_operations import update_scooter
@@ -1320,7 +1315,7 @@ def delete_traveller_menu():
     list_travellers()
     
     print("\nEnter the ID of the Traveller to delete:")
-    traveller_id = input("Traveller ID: ").strip()
+    traveller_id = get_validated_id("Traveller ID: ", "Traveller")
     if not traveller_id:
         print("Traveller ID is required. Operation cancelled")
         return
@@ -1361,13 +1356,15 @@ def delete_scooter_menu():
     list_scooters()
     
     print("\nEnter the ID of the Scooter to delete:")
-    scooter_id = input("Scooter ID: ").strip()
+    scooter_id = collector.get_validated_input(
+        "Scooter ID: ",
+        lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
+        "Invalid scooter ID. Must be a number.",
+        username="unknown",
+        field_name="scooter_id"
+    )
     if not scooter_id:
         print("Scooter ID is required. Operation cancelled")
-        return
-    
-    if not scooter_id.isdigit():
-        print("Invalid scooter ID. Must be a number.")
         return
     
     from database import get_connection, close_connection
@@ -1407,20 +1404,17 @@ def add_system_admin(current_user):
             conn = get_connection()
             cursor = conn.cursor()
             
-            # Check for existing username by decrypting all usernames
             cursor.execute('SELECT id, username FROM Users')
             all_users = cursor.fetchall()
             
             existing_user = None
             for existing_id, existing_username in all_users:
                 try:
-                    # Try to decrypt the username
                     decrypted_username = decrypt_data(existing_username)
                     if decrypted_username.lower() == username.lower():
                         existing_user = (existing_id, existing_username)
                         break
                 except:
-                    # If decryption fails, check if it's a non-encrypted username (like super_admin)
                     if existing_username.lower() == username.lower():
                         existing_user = (existing_id, existing_username)
                         break
@@ -1667,7 +1661,7 @@ def delete_system_admin():
     close_connection(conn)
     
     if count == 0:
-        print("📋 No System Administrators found in the system.")
+        print("No System Administrators found in the system.")
         print("   Cannot delete System Administrators when none exist.")
         return
     
@@ -1704,7 +1698,7 @@ def delete_service_engineer():
     close_connection(conn)
     
     if count == 0:
-        print("📋 No Service Engineers found in the system.")
+        print("No Service Engineers found in the system.")
         print("   Cannot delete Service Engineers when none exist.")
         return
     
@@ -1743,7 +1737,7 @@ def reset_system_admin_password_menu():
     close_connection(conn)
     
     if count == 0:
-        print("📋 No System Administrators found in the system.")
+        print("No System Administrators found in the system.")
         print("   Cannot reset passwords when none exist.")
         return
     
@@ -1767,7 +1761,7 @@ def reset_system_admin_password_menu():
             return
         
         # Confirm the action
-        print(f"\n⚠️  WARNING: This will reset the password for System Admin ID {user_id}")
+        print(f"\nWARNING: This will reset the password for System Admin ID {user_id}")
         print("A temporary password will be generated and the user must change it on next login.")
         
         confirm = input("Are you sure you want to proceed? (y/n): ").strip().lower()
@@ -1777,9 +1771,9 @@ def reset_system_admin_password_menu():
         
         # Reset the password
         if reset_user_password(user_id, "super_admin"):
-            print("\n✅ Password reset completed successfully!")
+            print("\nPassword reset completed successfully!")
         else:
-            print("\n❌ Password reset failed.")
+            print("\nPassword reset failed.")
             
     except ValueError:
         print("Invalid user ID. Please enter a number.")
@@ -1803,7 +1797,7 @@ def reset_service_engineer_password_menu():
     close_connection(conn)
     
     if count == 0:
-        print("📋 No Service Engineers found in the system.")
+        print("No Service Engineers found in the system.")
         print("   Cannot reset passwords when none exist.")
         return
     
@@ -1827,7 +1821,7 @@ def reset_service_engineer_password_menu():
             return
         
         # Confirm the action
-        print(f"\n⚠️  WARNING: This will reset the password for Service Engineer ID {user_id}")
+        print(f"\nWARNING: This will reset the password for Service Engineer ID {user_id}")
         print("A temporary password will be generated and the user must change it on next login.")
         
         confirm = input("Are you sure you want to proceed? (y/n): ").strip().lower()
@@ -1837,9 +1831,9 @@ def reset_service_engineer_password_menu():
         
         # Reset the password
         if reset_user_password(user_id, "super_admin"):
-            print("\n✅ Password reset completed successfully!")
+            print("\nPassword reset completed successfully!")
         else:
-            print("\n❌ Password reset failed.")
+            print("\nPassword reset failed.")
             
     except ValueError:
         print("Invalid user ID. Please enter a number.")
@@ -1847,8 +1841,8 @@ def reset_service_engineer_password_menu():
 
 def view_logs(username):
     print("\n=== SYSTEM LOGS ===")
-    print("1. View All Logs (Paginated)")
-    print("2. View Suspicious Activities (Paginated)")
+    print("1. View All Logs")
+    print("2. View Suspicious Activities")
     print("3. Back")
     
     choice = collector.get_menu_choice("Enter your choice (1-3): ", 3, username=username, field_name="log_menu_choice")

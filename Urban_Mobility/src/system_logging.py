@@ -73,79 +73,8 @@ def log_login_attempt(username, success=True, password_attempts=1):
 def log_suspicious_activity(username, activity, details=""):
     log_action(username, f"Suspicious activity: {activity}", details, True)
 
-def detect_suspicious_patterns(username, action, additional_info=""):
-    suspicious = False
-    enhanced_info = additional_info
-    
-    if "Unsuccessful login" in action:
-        recent_failures = count_recent_failed_logins(username)
-        if recent_failures >= 3:
-            suspicious = True
-            enhanced_info = f"Multiple usernames and passwords are tried in a row ({recent_failures} attempts)"
-    
-    if is_rapid_successive_action(username, action):
-        suspicious = True
-        enhanced_info = f"Rapid successive actions detected: {action}"
-    
-    if "BLOCKED" in action and "wrong role" in additional_info:
-        suspicious = True
-        enhanced_info = f"Unauthorized access attempt: {additional_info}"
-    
-    return suspicious, enhanced_info
 
-def count_recent_failed_logins(username, minutes=10):
-    try:
-        logs = get_logs()
-        if isinstance(logs, str):
-            return 0
-        
-        current_time = datetime.now()
-        count = 0
-        
-        for log in logs:
-            if "Unsuccessful login" in log and username in log:
-                try:
-                    parts = log.split()
-                    if len(parts) >= 3:
-                        date_str = parts[1]
-                        time_str = parts[2]
-                        log_time = datetime.strptime(f"{date_str} {time_str}", "%d-%m-%Y %H:%M:%S")
-                        
-                        if (current_time - log_time).total_seconds() < (minutes * 60):
-                            count += 1
-                except:
-                    continue
-        
-        return count
-    except:
-        return 0
 
-def is_rapid_successive_action(username, action, minutes=2):
-    try:
-        logs = get_logs()
-        if isinstance(logs, str):
-            return False
-        
-        current_time = datetime.now()
-        recent_actions = 0
-        
-        for log in logs:
-            if username in log and action in log:
-                try:
-                    parts = log.split()
-                    if len(parts) >= 3:
-                        date_str = parts[1]
-                        time_str = parts[2]
-                        log_time = datetime.strptime(f"{date_str} {time_str}", "%d-%m-%Y %H:%M:%S")
-                        
-                        if (current_time - log_time).total_seconds() < (minutes * 60):
-                            recent_actions += 1
-                except:
-                    continue
-        
-        return recent_actions >= 5
-    except:
-        return False
 
 def get_logs():
     try:
@@ -203,32 +132,6 @@ def get_unread_suspicious_count(username=None):
     except:
         return 0
 
-def mark_suspicious_as_read():
-    try:
-        read_status_file = 'read_status/suspicious_read_status.json'
-        suspicious_logs = get_suspicious_logs()
-        
-        if isinstance(suspicious_logs, str):
-            return
-        
-        # Load existing read logs
-        existing_read_logs = set()
-        try:
-            with open(read_status_file, 'r') as f:
-                existing_read_logs = set(json.load(f))
-        except:
-            pass
-        
-        # Add all current suspicious logs to read list
-        for log in suspicious_logs:
-            log_id = hash(log)
-            existing_read_logs.add(log_id)
-        
-        # Save updated read logs
-        with open(read_status_file, 'w') as f:
-            json.dump(list(existing_read_logs), f)
-    except:
-        pass
 
 def mark_current_suspicious_as_read(username=None):
     """Mark only the suspicious logs that were just viewed as read"""
@@ -264,28 +167,6 @@ def mark_current_suspicious_as_read(username=None):
     except Exception as e:
         print(f"Error marking suspicious activities as read: {e}")
 
-def check_suspicious_activities():
-    suspicious_logs = get_suspicious_logs()
-    if isinstance(suspicious_logs, str):
-        return 0
-    
-    recent_count = 0
-    current_time = datetime.now()
-    
-    for log in suspicious_logs:
-        try:
-            parts = log.split()
-            if len(parts) >= 3:
-                date_str = parts[1]
-                time_str = parts[2]
-                log_time = datetime.strptime(f"{date_str} {time_str}", "%d-%m-%Y %H:%M:%S")
-                
-                if (current_time - log_time).total_seconds() < 86400:  # 24 hours
-                    recent_count += 1
-        except:
-            continue
-    
-    return recent_count
 
 def display_alert_if_suspicious(username=None):
     unread_count = get_unread_suspicious_count(username)
@@ -295,44 +176,6 @@ def display_alert_if_suspicious(username=None):
         return True
     return False
 
-def display_logs_formatted():
-    logs = get_logs()
-    if isinstance(logs, str):
-        print(logs)
-        return
-    
-    if not logs:
-        print("No logs available.")
-        return
-    
-    print("\n" + "=" * 120)
-    print("                                    SYSTEM ACTIVITY LOG")
-    print("=" * 120)
-    print(f"{'No.':<4} {'Date':<12} {'Time':<10} {'Username':<15} {'Description':<30} {'Additional Info':<25} {'Suspicious':<10}")
-    print("-" * 120)
-    
-    for log in logs:
-        try:
-            parts = log.split()
-            if len(parts) >= 6:
-                no = parts[0] if parts[0].startswith('No.') else "N/A"
-                date = parts[1] if len(parts) > 1 else "N/A"
-                time = parts[2] if len(parts) > 2 else "N/A"
-                username = parts[3] if len(parts) > 3 else "N/A"
-                
-                suspicious = parts[-1] if parts else "No"
-                
-                description_parts = parts[4:-1] if len(parts) > 4 else []
-                description = " ".join(description_parts) if description_parts else "N/A"
-                
-                if len(description) > 30:
-                    description = description[:27] + "..."
-                
-                print(f"{no:<4} {date:<12} {time:<10} {username:<15} {description:<30} {'':<25} {suspicious:<10}")
-        except:
-            print(f"Error parsing log: {log}")
-    
-    print("=" * 120)
 
 def display_logs_paginated(logs=None, page_size=5):
     """Display logs in a paginated table format with full detail viewing"""
@@ -659,21 +502,15 @@ def display_suspicious_logs_paginated(username, page_size=5):
                 print("✅ Suspicious activities marked as read.")
                 return
 
-def clear_logs():
-    try:
-        if os.path.exists(encrypted_log_file):
-            os.remove(encrypted_log_file)
-        if os.path.exists('system.log'):
-            os.remove('system.log')
-        return True
-    except Exception as e:
-        print(f"Error clearing logs: {e}")
-        return False
 
 def log_validation_failure(username, field_name, input_value, error_message, is_suspicious=False):
     truncated_input = input_value[:100] if len(input_value) > 100 else input_value
     
     suspicious_flag = detect_suspicious_input(input_value)
+    
+    # Check if this is a max attempts exceeded scenario - this is always suspicious
+    if "Max attempts" in error_message and "exceeded" in error_message:
+        is_suspicious = True
     
     # Format like the image: Description of activity | Additional Information
     log_entry = f"Input validation failed - {error_message}"

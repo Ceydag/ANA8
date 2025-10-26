@@ -116,53 +116,7 @@ class InputValidator:
         except ValueError:
             return False, "Invalid coordinate format"
 
-    def detect_sql_injection(self, input_value):
-        """Detect potential SQL injection attempts"""
-        if not input_value:
-            return False, "Input is empty"
-        
-        # Convert to lowercase for case-insensitive detection
-        input_lower = input_value.lower()
-        
-        # Common SQL injection patterns
-        sql_patterns = [
-            # Basic SQL commands
-            r'\b(select|insert|update|delete|drop|create|alter|exec|execute)\b',
-            # SQL operators and functions
-            r'[;\'"]\s*(or|and)\s+[\'"]?\d+[\'"]?\s*=\s*[\'"]?\d+[\'"]?',
-            r'union\s+select',
-            r'--\s*$',  # SQL comment
-            r'/\*.*\*/',  # SQL block comment
-            # Common injection techniques
-            r'[\'"]\s*;\s*drop\s+',
-            r'[\'"]\s*;\s*delete\s+',
-            r'[\'"]\s*;\s*insert\s+',
-            r'[\'"]\s*;\s*update\s+',
-            r'[\'"]\s*;\s*create\s+',
-            r'[\'"]\s*;\s*alter\s+',
-            # Boolean-based blind SQL injection
-            r'[\'"]\s*(or|and)\s+[\'"]?\d+[\'"]?\s*=\s*[\'"]?\d+[\'"]?',
-            # Time-based blind SQL injection
-            r'(sleep|waitfor|delay)\s*\(',
-            # Error-based SQL injection
-            r'(extractvalue|updatexml|floor|rand)\s*\(',
-        ]
-        
-        import re
-        for pattern in sql_patterns:
-            if re.search(pattern, input_lower):
-                return True, f"Potential SQL injection detected: {pattern}"
-        
-        return False, "No SQL injection detected"
 
-    def check_and_log_sql_injection(self, input_value, username="unknown", field_name="unknown"):
-        """Check for SQL injection and log as suspicious activity if detected"""
-        is_sql_injection, sql_message = self.detect_sql_injection(input_value)
-        if is_sql_injection:
-            from session_management import handle_suspicious_activity
-            terminate_session, termination_message = handle_suspicious_activity(username, f"SQL injection attempt in {field_name}: {input_value}")
-            return True, "Bad input. Incident logged.", terminate_session, termination_message
-        return False, "No SQL injection detected", False, ""
 
     def validate_target_range(self, min_range, max_range):
         try:
@@ -518,15 +472,6 @@ class InputCollector:
             except ValueError:
                 print("Please enter a valid number.")
 
-    def sanitize_input(self, input_str):
-        if not input_str:
-            return ""
-        sanitized = input_str.replace('\x00', '').replace('\r', '').replace('\n', '')
-        
-        if len(sanitized) > 1000:
-            sanitized = sanitized[:1000]
-        
-        return sanitized.strip()
 
 
 validator = InputValidator()
