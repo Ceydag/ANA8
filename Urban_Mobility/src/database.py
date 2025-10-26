@@ -19,7 +19,8 @@ def initialize_db():
         first_name TEXT,
         last_name TEXT,
         role TEXT NOT NULL,
-        registration_date TEXT
+        registration_date TEXT,
+        temp_password BOOLEAN DEFAULT 0
     )
     ''')
     

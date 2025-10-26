@@ -101,9 +101,3 @@ def handle_system_exit(username, context):
     log_action(username, f"System exit requested in {context}", "User requested system exit", suspicious=False)
     print("System shutting down...")
     return False
-
-def get_error_summary():
-    return "Error summary functionality would be implemented here"
-
-def clear_error_logs():
-    return True

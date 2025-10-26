@@ -2,6 +2,7 @@ import sqlite3
 from database import get_connection, close_connection
 from encryption import encrypt_data, decrypt_data
 from system_logging import log_action
+from session_management import get_current_user_id
 import re
 
 def create_user(user_data, current_user):
@@ -14,7 +15,25 @@ def create_user(user_data, current_user):
             
         cursor = conn.cursor()
 
+        # Check for existing username by decrypting all usernames
+        cursor.execute('SELECT id, username FROM Users')
+        all_users = cursor.fetchall()
+        
+        for existing_id, existing_username in all_users:
+            try:
+                # Try to decrypt the username
+                decrypted_username = decrypt_data(existing_username)
+                if decrypted_username.lower() == user_data['username'].lower():
+                    print(f"ERROR: Username '{user_data['username']}' is already taken.")
+                    return False
+            except:
+                # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                if existing_username.lower() == user_data['username'].lower():
+                    print(f"ERROR: Username '{user_data['username']}' is already taken.")
+                    return False
+        
         encrypted_username = encrypt_data(user_data['username'])
+
         encrypted_first_name = encrypt_data(user_data['first_name'])
         encrypted_last_name = encrypt_data(user_data['last_name'])
         
@@ -127,8 +146,8 @@ def list_system_admins(current_user):
         users = cursor.fetchall()
         
         if not users:
-            print("📋 No System Administrators found in the system.")
-            print("⚠️  Note: Super Admin account is protected and not shown in this list.")
+            print("No System Administrators found in the system.")
+            print("Note: Super Admin account is protected and not shown in this list.")
             return
         
         print("\n" + "=" * 90)
@@ -214,35 +233,37 @@ def delete_user_by_id(user_id, current_user, allowed_role=None):
         
         # 1. Never allow deletion of super_admin
         if username == 'super_admin':
-            print("❌ ERROR: Cannot delete super_admin account!")
+            print(f"No user found with ID {user_id}")
             log_action(current_user, f"Attempted to delete super_admin - BLOCKED")
             return False
         
         # 2. Check if current user can delete this role
         if allowed_role and role != allowed_role:
-            # Decrypt username for better error message
+            # Decrypt username for logging purposes only
             try:
                 decrypted_username = decrypt_data(username)
             except:
                 decrypted_username = username
             
-            print(f"❌ ERROR: User ID {user_id} is a {role}, but you can only delete {allowed_role} users!")
-            print(f"   User: {decrypted_username}")
+            print(f"No user found with ID {user_id}")
             log_action(current_user, f"Attempted to delete {role} user {decrypted_username} - BLOCKED (wrong role)")
             return False
         
         # 3. Additional security: Prevent deletion of other System Admins by System Admins
+        # But allow System Admins to delete their own account
         if current_user != 'super_admin' and role == 'System Admin':
-            # Decrypt username for better error message
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
-            
-            print("❌ ERROR: Only Super Admin can delete System Administrators!")
-            print(f"   User: {decrypted_username}")
-            log_action(current_user, f"Attempted to delete System Admin {decrypted_username} - BLOCKED (insufficient privileges)")
-            return False
+            # Check if this is the current user trying to delete their own account
+            current_user_id = get_current_user_id(current_user)
+            if user_id != current_user_id:
+                # Decrypt username for logging purposes only
+                try:
+                    decrypted_username = decrypt_data(username)
+                except:
+                    decrypted_username = username
+                
+                print(f"No user found with ID {user_id}")
+                log_action(current_user, f"Attempted to delete System Admin {decrypted_username} - BLOCKED (insufficient privileges)")
+                return False
         
         # Delete the user
         cursor.execute('DELETE FROM Users WHERE id = ?', (user_id,))
@@ -256,7 +277,7 @@ def delete_user_by_id(user_id, current_user, allowed_role=None):
             
             conn.commit()
             log_action(current_user, f"Deleted {role} user: {decrypted_username}")
-            print(f"✅ User {decrypted_username} ({role}) deleted successfully!")
+            print(f"User {decrypted_username} ({role}) deleted successfully!")
             return True
         else:
             print(f"Failed to delete user with ID {user_id}")
@@ -283,20 +304,11 @@ def validate_user_exists_with_role(user_id, required_role):
             user_exists = cursor.fetchone()
             
             if not user_exists:
-                print(f"❌ ERROR: No user found with ID {user_id}")
-                print(f"   Please select a valid ID from the list above.")
+                print(f"No user found with ID {user_id}")
                 return False, None, None
             else:
-                # User exists but wrong role
-                existing_username, existing_role = user_exists
-                try:
-                    decrypted_username = decrypt_data(existing_username)
-                except:
-                    decrypted_username = existing_username
-                
-                print(f"❌ ERROR: User ID {user_id} exists but is a {existing_role}, not a {required_role}!")
-                print(f"   User: {decrypted_username}")
-                print(f"   This menu can only update {required_role} users.")
+                # User exists but wrong role - generic message
+                print(f"No user found with ID {user_id}")
                 return False, None, None
         
         username, role = user_info
@@ -320,24 +332,32 @@ def update_user_by_id(user_id, update_data, current_user, role):
         user = cursor.fetchone()
         
         if not user:
-            print(f"ERROR: User with ID {user_id} not found.")
+            print(f"No user found with ID {user_id}")
             return False
         
         if user[2] != role:
-            print(f"ERROR: User with ID {user_id} is not a {role}.")
+            print(f"No user found with ID {user_id}")
             return False
         
         if 'username' in update_data:
             new_username = update_data['username']
-            encrypted_new_username = encrypt_data(new_username)
             
-            cursor.execute('SELECT id FROM Users WHERE username = ? AND id != ?', 
-                         (encrypted_new_username, user_id))
-            existing_user = cursor.fetchone()
+            # Get all users and check for username conflicts by decrypting them
+            cursor.execute('SELECT id, username FROM Users WHERE id != ?', (user_id,))
+            all_users = cursor.fetchall()
             
-            if existing_user:
-                print(f"ERROR: Username '{new_username}' is already taken.")
-                return False
+            for existing_id, existing_username in all_users:
+                try:
+                    # Try to decrypt the username
+                    decrypted_username = decrypt_data(existing_username)
+                    if decrypted_username.lower() == new_username.lower():
+                        print(f"ERROR: Username '{new_username}' is already taken.")
+                        return False
+                except:
+                    # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                    if existing_username.lower() == new_username.lower():
+                        print(f"ERROR: Username '{new_username}' is already taken.")
+                        return False
         
         set_clauses = []
         values = []
@@ -375,16 +395,122 @@ def update_user_by_id(user_id, update_data, current_user, role):
     finally:
         close_connection(conn)
 
+def generate_temporary_password():
+    """Generate a secure temporary password"""
+    import random
+    import string
+    
+    # Generate a 12-character password with mixed case, numbers, and special chars
+    lowercase = string.ascii_lowercase
+    uppercase = string.ascii_uppercase
+    digits = string.digits
+    special_chars = "!@#$%&*"
+    
+    # Ensure at least one character from each category
+    password = [
+        random.choice(lowercase),
+        random.choice(uppercase),
+        random.choice(digits),
+        random.choice(special_chars)
+    ]
+    
+    # Fill the rest randomly
+    all_chars = lowercase + uppercase + digits + special_chars
+    for _ in range(8):  # 12 total - 4 already added = 8 more
+        password.append(random.choice(all_chars))
+    
+    # Shuffle the password
+    random.shuffle(password)
+    return ''.join(password)
+
+def reset_user_password(user_id, current_user):
+    """Reset a user's password to a temporary password"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Get user info
+        cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
+        user_info = cursor.fetchone()
+        
+        if not user_info:
+            print(f"No user found with ID {user_id}")
+            return False
+        
+        username, role = user_info
+        
+        # Generate temporary password
+        temp_password = generate_temporary_password()
+        
+        # Hash the temporary password
+        from authentication import hash_password
+        hashed_temp_password = hash_password(temp_password)
+        
+        # Update password and set temp_password flag
+        cursor.execute('''
+            UPDATE Users 
+            SET password_hash = ?, temp_password = 1
+            WHERE id = ?
+        ''', (hashed_temp_password, user_id))
+        
+        if cursor.rowcount > 0:
+            conn.commit()
+            
+            # Decrypt username for logging
+            try:
+                decrypted_username = decrypt_data(username)
+            except:
+                decrypted_username = username
+            
+            log_action(current_user, f"Reset password for {role}: {decrypted_username}")
+            
+            print(f"✅ Password reset successfully for {decrypted_username} ({role})")
+            print(f"🔑 Temporary password: {temp_password}")
+            print(f"⚠️  User must change password on next login!")
+            return True
+        else:
+            print(f"ERROR: Failed to reset password for user ID {user_id}")
+            return False
+            
+    except Exception as e:
+        print(f"ERROR resetting password: {e}")
+        return False
+    finally:
+        close_connection(conn)
+
 def update_user_password(username, new_password_hash, current_user):
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
+        # Find the user by decrypting all usernames
+        cursor.execute('SELECT id, username FROM Users')
+        all_users = cursor.fetchall()
+        
+        user_id = None
+        for existing_id, existing_username in all_users:
+            try:
+                # Try to decrypt the username
+                decrypted_username = decrypt_data(existing_username)
+                if decrypted_username.lower() == username.lower():
+                    user_id = existing_id
+                    break
+            except:
+                # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                if existing_username.lower() == username.lower():
+                    user_id = existing_id
+                    break
+        
+        if not user_id:
+            print(f"User not found.")
+            return False
+        
+        # Update password using user ID
         cursor.execute('''
             UPDATE Users 
-            SET password_hash = ?
-            WHERE username = ?
-        ''', (new_password_hash, username))
+            SET password_hash = ?, temp_password = 0
+            WHERE id = ?
+        ''', (new_password_hash, user_id))
         
         if cursor.rowcount > 0:
             conn.commit()
@@ -397,6 +523,36 @@ def update_user_password(username, new_password_hash, current_user):
             
     except Exception as e:
         print(f"Error updating password: {e}")
+        return False
+
+def check_temp_password(username):
+    """Check if user has a temporary password"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Find the user by decrypting all usernames
+        cursor.execute('SELECT id, username, temp_password FROM Users')
+        all_users = cursor.fetchall()
+        
+        for existing_id, existing_username, temp_password in all_users:
+            try:
+                # Try to decrypt the username
+                decrypted_username = decrypt_data(existing_username)
+                if decrypted_username.lower() == username.lower():
+                    close_connection(conn)
+                    return bool(temp_password)
+            except:
+                # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                if existing_username.lower() == username.lower():
+                    close_connection(conn)
+                    return bool(temp_password)
+        
+        close_connection(conn)
+        return False
+        
+    except Exception as e:
+        print(f"Error checking temp password: {e}")
         return False
 
 def delete_user(username, current_user):
@@ -673,8 +829,7 @@ def update_traveller(traveller_id, update_data):
         traveller_exists = cursor.fetchone()
         
         if not traveller_exists:
-            print(f"❌ ERROR: No traveller found with ID {traveller_id}")
-            print(f"   Please select a valid traveller ID from the list above.")
+            print(f"No traveller found with ID {traveller_id}")
             return False
 
         encrypted_fields = ['first_name', 'last_name', 'email', 'mobile_phone', 
@@ -968,8 +1123,7 @@ def update_scooter(scooter_id, update_data):
         scooter_exists = cursor.fetchone()
         
         if not scooter_exists:
-            print(f"❌ ERROR: No scooter found with ID {scooter_id}")
-            print(f"   Please select a valid scooter ID from the list above.")
+            print(f"No scooter found with ID {scooter_id}")
             return False
         set_clauses = []
         values = []

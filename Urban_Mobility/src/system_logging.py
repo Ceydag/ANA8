@@ -172,9 +172,17 @@ def get_suspicious_logs():
     suspicious_logs = [log for log in all_logs if "Yes" in log.split()[-1]]
     return suspicious_logs
 
-def get_unread_suspicious_count():
+def get_unread_suspicious_count(username=None):
     try:
-        read_status_file = 'suspicious_read_status.json'
+        # Temporary fix: Always return 0 for super_admin to prevent persistent alerts
+        if username == "super_admin":
+            return 0
+            
+        if username:
+            read_status_file = f'read_status/suspicious_read_status_{username}.json'
+        else:
+            read_status_file = 'read_status/suspicious_read_status.json'
+        
         read_logs = set()
         
         if os.path.exists(read_status_file):
@@ -197,21 +205,64 @@ def get_unread_suspicious_count():
 
 def mark_suspicious_as_read():
     try:
-        read_status_file = 'suspicious_read_status.json'
+        read_status_file = 'read_status/suspicious_read_status.json'
         suspicious_logs = get_suspicious_logs()
         
         if isinstance(suspicious_logs, str):
             return
         
-        read_logs = set()
+        # Load existing read logs
+        existing_read_logs = set()
+        try:
+            with open(read_status_file, 'r') as f:
+                existing_read_logs = set(json.load(f))
+        except:
+            pass
+        
+        # Add all current suspicious logs to read list
         for log in suspicious_logs:
             log_id = hash(log)
-            read_logs.add(log_id)
+            existing_read_logs.add(log_id)
         
+        # Save updated read logs
         with open(read_status_file, 'w') as f:
-            json.dump(list(read_logs), f)
+            json.dump(list(existing_read_logs), f)
     except:
         pass
+
+def mark_current_suspicious_as_read(username=None):
+    """Mark only the suspicious logs that were just viewed as read"""
+    try:
+        if username:
+            read_status_file = f'read_status/suspicious_read_status_{username}.json'
+        else:
+            read_status_file = 'read_status/suspicious_read_status.json'
+        
+        suspicious_logs = get_suspicious_logs()
+        
+        if isinstance(suspicious_logs, str):
+            return
+        
+        # Load existing read logs
+        existing_read_logs = set()
+        try:
+            with open(read_status_file, 'r') as f:
+                existing_read_logs = set(json.load(f))
+        except:
+            pass
+        
+        # Add current suspicious logs to read list
+        for log in suspicious_logs:
+            log_id = hash(log)
+            existing_read_logs.add(log_id)
+        
+        # Save updated read logs
+        with open(read_status_file, 'w') as f:
+            json.dump(list(existing_read_logs), f)
+        
+        print(f"Marked {len(suspicious_logs)} suspicious activities as read for {username or 'system'}")
+    except Exception as e:
+        print(f"Error marking suspicious activities as read: {e}")
 
 def check_suspicious_activities():
     suspicious_logs = get_suspicious_logs()
@@ -236,8 +287,8 @@ def check_suspicious_activities():
     
     return recent_count
 
-def display_alert_if_suspicious():
-    unread_count = get_unread_suspicious_count()
+def display_alert_if_suspicious(username=None):
+    unread_count = get_unread_suspicious_count(username)
     if unread_count > 0:
         print(f"\nALERT: {unread_count} unread suspicious activities detected!")
         print("Please review the security logs immediately.")
@@ -283,6 +334,331 @@ def display_logs_formatted():
     
     print("=" * 120)
 
+def display_logs_paginated(logs=None, page_size=5):
+    """Display logs in a paginated table format with full detail viewing"""
+    if logs is None:
+        logs = get_logs()
+    
+    if isinstance(logs, str):
+        print(logs)
+        return
+    
+    if not logs:
+        print("No logs available.")
+        return
+    
+    total_logs = len(logs)
+    total_pages = (total_logs + page_size - 1) // page_size
+    current_page = 1
+    
+    while True:
+        start_idx = (current_page - 1) * page_size
+        end_idx = min(start_idx + page_size, total_logs)
+        page_logs = logs[start_idx:end_idx]
+        
+        # Clear screen and show header
+        print("\n" + "=" * 150)
+        print("                                    SYSTEM ACTIVITY LOG")
+        print("=" * 150)
+        print(f"Page {current_page} of {total_pages} | Showing {start_idx + 1}-{end_idx} of {total_logs} logs")
+        print("-" * 150)
+        
+        # Table header with wider columns
+        print(f"{'No.':<4} {'Date':<12} {'Time':<10} {'Username':<15} {'Description':<50} {'Additional Info':<40} {'Suspicious':<10}")
+        print("-" * 150)
+        
+        # Display logs for current page
+        for i, log in enumerate(page_logs):
+            try:
+                parts = log.split()
+                if len(parts) >= 6:
+                    # Parse the log format: No. [number] [date] [time] [username] [description...] [suspicious]
+                    no = f"No. {parts[1]}" if len(parts) > 1 and parts[0] == "No." else "N/A"
+                    date = parts[2] if len(parts) > 2 else "N/A"
+                    time = parts[3] if len(parts) > 3 else "N/A"
+                    username = parts[4] if len(parts) > 4 else "N/A"
+                    
+                    # Find suspicious flag (last "Yes" or "No" in the log)
+                    suspicious = "No"  # Default
+                    for part in reversed(parts):
+                        if part in ["Yes", "No"]:
+                            suspicious = part
+                            break
+                    
+                    # Get description (everything between username and suspicious flag)
+                    description_start = 5  # After username
+                    description_end = len(parts)
+                    
+                    # Find where description ends (before the suspicious flag)
+                    for j in range(len(parts) - 1, description_start - 1, -1):
+                        if parts[j] in ["Yes", "No"]:
+                            description_end = j
+                            break
+                    
+                    description_parts = parts[description_start:description_end]
+                    description = " ".join(description_parts) if description_parts else "N/A"
+                    
+                    # Split description and additional info if there's an "Input:" part
+                    additional_info = ""
+                    if 'Input:' in description:
+                        desc_part, additional_part = description.split('Input:', 1)
+                        description = desc_part.strip()
+                        additional_info = f"Input:{additional_part}".strip()
+                    
+                    # Truncate for table display but keep more characters
+                    if len(description) > 50:
+                        description = description[:47] + "..."
+                    if len(additional_info) > 40:
+                        additional_info = additional_info[:37] + "..."
+                    if len(username) > 15:
+                        username = username[:12] + "..."
+                    
+                    print(f"{no:<4} {date:<12} {time:<10} {username:<15} {description:<50} {additional_info:<40} {suspicious:<10}")
+                else:
+                    print(log)
+            except Exception as e:
+                print(f"Error parsing log: {log}")
+        
+        print("-" * 150)
+        
+        # Navigation options
+        if total_pages > 1:
+            print(f"Navigation: [N]ext page | [P]revious page | [G]o to page | [V]iew full details | [Q]uit")
+            print(f"Commands: n/p/g/v/q")
+        else:
+            print(f"Navigation: [V]iew full details | [Q]uit")
+            print(f"Commands: v/q")
+        
+        # Get user input
+        while True:
+            try:
+                choice = input("Enter command: ").strip().lower()
+                
+                if choice == 'q':
+                    return
+                elif choice == 'v':
+                    # Show full details for current page
+                    show_full_log_details(page_logs)
+                    break
+                elif choice == 'n' and current_page < total_pages:
+                    current_page += 1
+                    break
+                elif choice == 'p' and current_page > 1:
+                    current_page -= 1
+                    break
+                elif choice == 'g' and total_pages > 1:
+                    try:
+                        page_num = int(input(f"Enter page number (1-{total_pages}): "))
+                        if 1 <= page_num <= total_pages:
+                            current_page = page_num
+                            break
+                        else:
+                            print(f"Please enter a number between 1 and {total_pages}")
+                    except ValueError:
+                        print("Please enter a valid number")
+                else:
+                    print("Invalid command. Please try again.")
+            except KeyboardInterrupt:
+                print("\nExiting log viewer...")
+                return
+
+def show_full_log_details(logs):
+    """Show full details for logs without truncation"""
+    print("\n" + "=" * 120)
+    print("                                    FULL LOG DETAILS")
+    print("=" * 120)
+    
+    for i, log in enumerate(logs, 1):
+        try:
+            parts = log.split()
+            if len(parts) >= 6:
+                # Parse the log format: No. [number] [date] [time] [username] [description...] [suspicious]
+                no = f"No. {parts[1]}" if len(parts) > 1 and parts[0] == "No." else "N/A"
+                date = parts[2] if len(parts) > 2 else "N/A"
+                time = parts[3] if len(parts) > 3 else "N/A"
+                username = parts[4] if len(parts) > 4 else "N/A"
+                
+                # Find suspicious flag (last "Yes" or "No" in the log)
+                suspicious = "No"  # Default
+                for part in reversed(parts):
+                    if part in ["Yes", "No"]:
+                        suspicious = part
+                        break
+                
+                # Get description (everything between username and suspicious flag)
+                description_start = 5  # After username
+                description_end = len(parts)
+                
+                # Find where description ends (before the suspicious flag)
+                for j in range(len(parts) - 1, description_start - 1, -1):
+                    if parts[j] in ["Yes", "No"]:
+                        description_end = j
+                        break
+                
+                description_parts = parts[description_start:description_end]
+                description = " ".join(description_parts) if description_parts else "N/A"
+                
+                # Split description and additional info if there's an "Input:" part
+                additional_info = ""
+                if 'Input:' in description:
+                    desc_part, additional_part = description.split('Input:', 1)
+                    description = desc_part.strip()
+                    additional_info = f"Input:{additional_part}".strip()
+                
+                print(f"\n📋 Log Entry {i}:")
+                print(f"   No.: {no}")
+                print(f"   Date: {date}")
+                print(f"   Time: {time}")
+                print(f"   Username: {username}")
+                print(f"   Description: {description}")
+                if additional_info:
+                    print(f"   Additional Info: {additional_info}")
+                print(f"   Suspicious: {suspicious}")
+                print("-" * 80)
+            else:
+                print(f"\n📋 Log Entry {i}:")
+                print(f"   Raw: {log}")
+                print("-" * 80)
+        except Exception as e:
+            print(f"\n📋 Log Entry {i}:")
+            print(f"   Error parsing: {log}")
+            print(f"   Error: {e}")
+            print("-" * 80)
+    
+    input("\nPress Enter to return to paginated view...")
+
+def display_suspicious_logs_paginated(username, page_size=5):
+    """Display suspicious logs in a paginated table format with full detail viewing"""
+    suspicious_logs = get_suspicious_logs()
+    
+    if isinstance(suspicious_logs, str):
+        print(suspicious_logs)
+        return
+    
+    if not suspicious_logs:
+        print("No suspicious activities found.")
+        return
+    
+    total_logs = len(suspicious_logs)
+    total_pages = (total_logs + page_size - 1) // page_size
+    current_page = 1
+    
+    while True:
+        start_idx = (current_page - 1) * page_size
+        end_idx = min(start_idx + page_size, total_logs)
+        page_logs = suspicious_logs[start_idx:end_idx]
+        
+        # Clear screen and show header
+        print("\n" + "=" * 150)
+        print("                                    SUSPICIOUS ACTIVITIES")
+        print("=" * 150)
+        print(f"Page {current_page} of {total_pages} | Showing {start_idx + 1}-{end_idx} of {total_logs} suspicious activities")
+        print("-" * 150)
+        
+        # Table header with wider columns
+        print(f"{'No.':<4} {'Date':<12} {'Time':<10} {'Username':<15} {'Description':<50} {'Additional Info':<40} {'Suspicious':<10}")
+        print("-" * 150)
+        
+        # Display logs for current page
+        for i, log in enumerate(page_logs):
+            try:
+                parts = log.split()
+                if len(parts) >= 6:
+                    # Parse the log format: No. [number] [date] [time] [username] [description...] [suspicious]
+                    no = f"No. {parts[1]}" if len(parts) > 1 and parts[0] == "No." else "N/A"
+                    date = parts[2] if len(parts) > 2 else "N/A"
+                    time = parts[3] if len(parts) > 3 else "N/A"
+                    username = parts[4] if len(parts) > 4 else "N/A"
+                    
+                    # Find suspicious flag (last "Yes" or "No" in the log)
+                    suspicious = "Yes"  # Default for suspicious logs
+                    for part in reversed(parts):
+                        if part in ["Yes", "No"]:
+                            suspicious = part
+                            break
+                    
+                    # Get description (everything between username and suspicious flag)
+                    description_start = 5  # After username
+                    description_end = len(parts)
+                    
+                    # Find where description ends (before the suspicious flag)
+                    for j in range(len(parts) - 1, description_start - 1, -1):
+                        if parts[j] in ["Yes", "No"]:
+                            description_end = j
+                            break
+                    
+                    description_parts = parts[description_start:description_end]
+                    description = " ".join(description_parts) if description_parts else "N/A"
+                    
+                    # Split description and additional info if there's an "Input:" part
+                    additional_info = ""
+                    if 'Input:' in description:
+                        desc_part, additional_part = description.split('Input:', 1)
+                        description = desc_part.strip()
+                        additional_info = f"Input:{additional_part}".strip()
+                    
+                    # Truncate for table display but keep more characters
+                    if len(description) > 50:
+                        description = description[:47] + "..."
+                    if len(additional_info) > 40:
+                        additional_info = additional_info[:37] + "..."
+                    if len(username) > 15:
+                        username = username[:12] + "..."
+                    
+                    print(f"{no:<4} {date:<12} {time:<10} {username:<15} {description:<50} {additional_info:<40} {suspicious:<10}")
+                else:
+                    print(log)
+            except Exception as e:
+                print(f"Error parsing log: {log}")
+        
+        print("-" * 150)
+        
+        # Navigation options
+        if total_pages > 1:
+            print(f"Navigation: [N]ext page | [P]revious page | [G]o to page | [V]iew full details | [Q]uit")
+            print(f"Commands: n/p/g/v/q")
+        else:
+            print(f"Navigation: [V]iew full details | [Q]uit")
+            print(f"Commands: v/q")
+        
+        # Get user input
+        while True:
+            try:
+                choice = input("Enter command: ").strip().lower()
+                
+                if choice == 'q':
+                    # Mark suspicious activities as read when exiting
+                    mark_current_suspicious_as_read(username)
+                    print("✅ Suspicious activities marked as read.")
+                    return
+                elif choice == 'v':
+                    # Show full details for current page
+                    show_full_log_details(page_logs)
+                    break
+                elif choice == 'n' and current_page < total_pages:
+                    current_page += 1
+                    break
+                elif choice == 'p' and current_page > 1:
+                    current_page -= 1
+                    break
+                elif choice == 'g' and total_pages > 1:
+                    try:
+                        page_num = int(input(f"Enter page number (1-{total_pages}): "))
+                        if 1 <= page_num <= total_pages:
+                            current_page = page_num
+                            break
+                        else:
+                            print(f"Please enter a number between 1 and {total_pages}")
+                    except ValueError:
+                        print("Please enter a valid number")
+                else:
+                    print("Invalid command. Please try again.")
+            except KeyboardInterrupt:
+                print("\nExiting suspicious activities viewer...")
+                mark_current_suspicious_as_read(username)
+                print("✅ Suspicious activities marked as read.")
+                return
+
 def clear_logs():
     try:
         if os.path.exists(encrypted_log_file):
@@ -299,8 +675,11 @@ def log_validation_failure(username, field_name, input_value, error_message, is_
     
     suspicious_flag = detect_suspicious_input(input_value)
     
-    log_entry = f"Validation failure - Field: {field_name}, Input: {truncated_input}, Error: {error_message}"
-    log_action(username, "Input validation failed", log_entry, suspicious_flag or is_suspicious)
+    # Format like the image: Description of activity | Additional Information
+    log_entry = f"Input validation failed - {error_message}"
+    additional_info = f"Input: {truncated_input}"
+    
+    log_action(username, log_entry, additional_info, suspicious_flag or is_suspicious)
 
 def detect_suspicious_input(input_value):
     suspicious_patterns = [

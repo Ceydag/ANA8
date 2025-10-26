@@ -116,6 +116,54 @@ class InputValidator:
         except ValueError:
             return False, "Invalid coordinate format"
 
+    def detect_sql_injection(self, input_value):
+        """Detect potential SQL injection attempts"""
+        if not input_value:
+            return False, "Input is empty"
+        
+        # Convert to lowercase for case-insensitive detection
+        input_lower = input_value.lower()
+        
+        # Common SQL injection patterns
+        sql_patterns = [
+            # Basic SQL commands
+            r'\b(select|insert|update|delete|drop|create|alter|exec|execute)\b',
+            # SQL operators and functions
+            r'[;\'"]\s*(or|and)\s+[\'"]?\d+[\'"]?\s*=\s*[\'"]?\d+[\'"]?',
+            r'union\s+select',
+            r'--\s*$',  # SQL comment
+            r'/\*.*\*/',  # SQL block comment
+            # Common injection techniques
+            r'[\'"]\s*;\s*drop\s+',
+            r'[\'"]\s*;\s*delete\s+',
+            r'[\'"]\s*;\s*insert\s+',
+            r'[\'"]\s*;\s*update\s+',
+            r'[\'"]\s*;\s*create\s+',
+            r'[\'"]\s*;\s*alter\s+',
+            # Boolean-based blind SQL injection
+            r'[\'"]\s*(or|and)\s+[\'"]?\d+[\'"]?\s*=\s*[\'"]?\d+[\'"]?',
+            # Time-based blind SQL injection
+            r'(sleep|waitfor|delay)\s*\(',
+            # Error-based SQL injection
+            r'(extractvalue|updatexml|floor|rand)\s*\(',
+        ]
+        
+        import re
+        for pattern in sql_patterns:
+            if re.search(pattern, input_lower):
+                return True, f"Potential SQL injection detected: {pattern}"
+        
+        return False, "No SQL injection detected"
+
+    def check_and_log_sql_injection(self, input_value, username="unknown", field_name="unknown"):
+        """Check for SQL injection and log as suspicious activity if detected"""
+        is_sql_injection, sql_message = self.detect_sql_injection(input_value)
+        if is_sql_injection:
+            from session_management import handle_suspicious_activity
+            terminate_session, termination_message = handle_suspicious_activity(username, f"SQL injection attempt in {field_name}: {input_value}")
+            return True, "Bad input. Incident logged.", terminate_session, termination_message
+        return False, "No SQL injection detected", False, ""
+
     def validate_target_range(self, min_range, max_range):
         try:
             min_val = float(min_range)
@@ -150,6 +198,18 @@ class InputCollector:
                 attempts += 1
                 continue
             
+            # Check for suspicious input attempts (SQL injection, XSS, path traversal, etc.)
+            from system_logging import detect_suspicious_input
+            if detect_suspicious_input(user_input):
+                # Log as suspicious activity and terminate session
+                from session_management import handle_suspicious_activity
+                terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {user_input}")
+                log_validation_failure(username, field_name, user_input, f"SUSPICIOUS: Malicious input pattern detected")
+                print("Bad input. Incident logged.")
+                # Exit the program immediately
+                import sys
+                sys.exit(0)
+            
             is_valid, message = validation_func(user_input)
             
             if is_valid:
@@ -166,18 +226,40 @@ class InputCollector:
         print(f"Maximum attempts ({max_attempts}) exceeded. Skipping this field.")
         return None
 
-    def get_first_name(self):
+    def get_first_name(self, username="unknown", field_name="first_name"):
         return self.get_validated_input(
             "Enter first name: ",
             lambda x: self.validator.validate_pattern(x, 'name', 'first name'),
-            "First name must be 2-50 characters with letters, spaces, apostrophes, and hyphens only"
+            "First name must be 2-50 characters with letters, spaces, apostrophes, and hyphens only",
+            username=username,
+            field_name=field_name
         )
 
-    def get_last_name(self):
+    def get_last_name(self, username="unknown", field_name="last_name"):
         return self.get_validated_input(
             "Enter last name: ",
             lambda x: self.validator.validate_pattern(x, 'name', 'last name'),
-            "Last name must be 2-50 characters with letters, spaces, apostrophes, and hyphens only"
+            "Last name must be 2-50 characters with letters, spaces, apostrophes, and hyphens only",
+            username=username,
+            field_name=field_name
+        )
+
+    def get_street_name(self, username="unknown", field_name="street_name"):
+        return self.get_validated_input(
+            "Enter street name: ",
+            lambda x: self.validator.validate_pattern(x, 'street', 'street name'),
+            "Street name must be 2-100 characters with letters, numbers, spaces, apostrophes, hyphens, and periods only",
+            username=username,
+            field_name=field_name
+        )
+
+    def get_house_number(self, username="unknown", field_name="house_number"):
+        return self.get_validated_input(
+            "Enter house number: ",
+            lambda x: self.validator.validate_pattern(x, 'house_number', 'house number'),
+            "House number must be 1-10 characters with letters, numbers, spaces, and hyphens only",
+            username=username,
+            field_name=field_name
         )
 
     def get_username(self):
@@ -300,7 +382,7 @@ class InputCollector:
             "Mileage must be between 0-100000 km."
         )
 
-    def get_coordinates(self):
+    def get_coordinates(self, username="unknown", field_name="coordinates"):
         """✅ C4 L3: Specialized input with custom validation"""
         print("Enter GPS coordinates for Rotterdam region:")
         
@@ -312,6 +394,15 @@ class InputCollector:
                 if not lat_input or not lon_input:
                     print("Coordinates cannot be empty. Please try again.")
                     continue
+                
+                # Check for suspicious input
+                from system_logging import detect_suspicious_input
+                if detect_suspicious_input(lat_input) or detect_suspicious_input(lon_input):
+                    from session_management import handle_suspicious_activity
+                    handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {lat_input}, {lon_input}")
+                    print("Bad input. Incident logged.")
+                    import sys
+                    sys.exit(0)
                 
                 is_valid, message = self.validator.validate_coordinates(lat_input, lon_input)
                 
@@ -326,7 +417,7 @@ class InputCollector:
                 print("\nInput cancelled.")
                 return None, None
 
-    def get_target_range(self):
+    def get_target_range(self, username="unknown", field_name="target_range"):
         while True:
             try:
                 min_range = input("Enter minimum target range (0-100%): ").strip()
@@ -335,6 +426,15 @@ class InputCollector:
                 if not min_range or not max_range:
                     print("Both values are required. Please try again.")
                     continue
+                
+                # Check for suspicious input
+                from system_logging import detect_suspicious_input
+                if detect_suspicious_input(min_range) or detect_suspicious_input(max_range):
+                    from session_management import handle_suspicious_activity
+                    handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {min_range}, {max_range}")
+                    print("Bad input. Incident logged.")
+                    import sys
+                    sys.exit(0)
                 
                 is_valid, message = self.validator.validate_target_range(min_range, max_range)
                 
@@ -373,9 +473,19 @@ class InputCollector:
                 print(f"\nInput cancelled for {field_name}.")
                 return None
 
-    def get_boolean_input(self, prompt):
+    def get_boolean_input(self, prompt, username="unknown", field_name="boolean_input"):
         while True:
             response = input(f"{prompt} (y/n): ").strip().lower()
+            
+            # Check for suspicious input
+            from system_logging import detect_suspicious_input
+            if detect_suspicious_input(response):
+                from session_management import handle_suspicious_activity
+                terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {response}")
+                print("Bad input. Incident logged.")
+                import sys
+                sys.exit(0)
+            
             if response in ['y', 'yes']:
                 return True
             elif response in ['n', 'no']:
@@ -383,13 +493,22 @@ class InputCollector:
             else:
                 print("Please enter 'y' for yes or 'n' for no.")
 
-    def get_menu_choice(self, prompt, max_choice):
+    def get_menu_choice(self, prompt, max_choice, username="unknown", field_name="menu_choice"):
         while True:
             try:
                 choice = input(prompt).strip()
                 if not choice:
                     print("Please enter a choice.")
                     continue
+                
+                # Check for suspicious input
+                from system_logging import detect_suspicious_input
+                if detect_suspicious_input(choice):
+                    from session_management import handle_suspicious_activity
+                    terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {choice}")
+                    print("Bad input. Incident logged.")
+                    import sys
+                    sys.exit(0)
                 
                 choice_num = int(choice)
                 if 1 <= choice_num <= max_choice:

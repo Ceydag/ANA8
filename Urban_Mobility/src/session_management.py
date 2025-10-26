@@ -189,6 +189,39 @@ def get_active_sessions():
             active_sessions.append(session.get_session_info())
     return active_sessions
 
+def get_current_user_id(username):
+    """Get the user ID for the current user from the database"""
+    try:
+        from database import get_connection, close_connection
+        from encryption import decrypt_data
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Find the user by decrypting all usernames
+        cursor.execute('SELECT id, username FROM Users')
+        all_users = cursor.fetchall()
+        
+        for existing_id, existing_username in all_users:
+            try:
+                # Try to decrypt the username
+                decrypted_username = decrypt_data(existing_username)
+                if decrypted_username.lower() == username.lower():
+                    close_connection(conn)
+                    return existing_id
+            except:
+                # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                if existing_username.lower() == username.lower():
+                    close_connection(conn)
+                    return existing_id
+        
+        close_connection(conn)
+        return None
+        
+    except Exception as e:
+        print(f"Error getting user ID: {e}")
+        return None
+
 def force_logout_user(username, reason="Forced logout by administrator"):
     if username in sessions:
         terminate_session(username, reason)

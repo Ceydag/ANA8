@@ -35,15 +35,32 @@ def generate_restore_code(system_admin_username, backup_filename):
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT role FROM Users WHERE username = ?', (system_admin_username,))
-        user_result = cursor.fetchone()
+        # Search for user by decrypting all usernames (since usernames are stored encrypted)
+        cursor.execute('SELECT id, username, role FROM Users')
+        all_users = cursor.fetchall()
         
-        if not user_result:
+        user_found = None
+        for user_id, encrypted_username, role in all_users:
+            try:
+                # Try to decrypt the username
+                decrypted_username = decrypt_data(encrypted_username)
+                if decrypted_username == system_admin_username:
+                    user_found = (user_id, encrypted_username, role)
+                    break
+            except:
+                # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                if encrypted_username == system_admin_username:
+                    user_found = (user_id, encrypted_username, role)
+                    break
+        
+        if not user_found:
             print(f"User {system_admin_username} not found")
             close_connection(conn)
             return None
         
-        if user_result[0] != 'System Admin':
+        user_id, encrypted_username, role = user_found
+        
+        if role != 'System Admin':
             print(f"User {system_admin_username} is not a System Admin")
             close_connection(conn)
             return None
@@ -51,7 +68,7 @@ def generate_restore_code(system_admin_username, backup_filename):
         cursor.execute('''
         INSERT INTO RestoreCodes (code, system_admin_username, backup_filename, created_date)
         VALUES (?, ?, ?, datetime('now'))
-        ''', (restore_code, system_admin_username, backup_filename))
+        ''', (restore_code, encrypted_username, backup_filename))
         
         conn.commit()
         close_connection(conn)
@@ -70,11 +87,34 @@ def restore_backup(restore_code, username):
         conn = get_connection()
         cursor = conn.cursor()
         
+        # First, find the encrypted username for the current user
+        cursor.execute('SELECT id, username, role FROM Users')
+        all_users = cursor.fetchall()
+        
+        encrypted_username = None
+        for user_id, encrypted_user, role in all_users:
+            try:
+                # Try to decrypt the username
+                decrypted_user = decrypt_data(encrypted_user)
+                if decrypted_user == username:
+                    encrypted_username = encrypted_user
+                    break
+            except:
+                # If decryption fails, check if it's a non-encrypted username (like super_admin)
+                if encrypted_user == username:
+                    encrypted_username = encrypted_user
+                    break
+        
+        if not encrypted_username:
+            print("User not found")
+            return False
+        
+        # Now search for the restore code with the encrypted username
         cursor.execute('''
         SELECT backup_filename, system_admin_username, used 
         FROM RestoreCodes 
         WHERE code = ? AND system_admin_username = ?
-        ''', (restore_code, username))
+        ''', (restore_code, encrypted_username))
         
         result = cursor.fetchone()
         
