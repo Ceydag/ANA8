@@ -1,8 +1,33 @@
 import sqlite3
+from datetime import datetime
 from database import get_connection, close_connection
 from encryption import encrypt_data, decrypt_data
 from system_logging import log_action
 from session_management import get_current_user_id
+
+def count_users_by_role(target_role):
+    """Count users with a specific role (handles encrypted roles)"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, role FROM Users')
+        all_users = cursor.fetchall()
+        close_connection(conn)
+        
+        count = 0
+        for user_id, role in all_users:
+            try:
+                decrypted_role = decrypt_data(role)
+                if decrypted_role == target_role:
+                    count += 1
+            except:
+                if role == target_role:
+                    count += 1
+        
+        return count
+    except Exception as e:
+        print(f"Error counting users by role: {e}")
+        return 0
 
 def create_user(user_data, current_user):
     conn = None
@@ -29,20 +54,23 @@ def create_user(user_data, current_user):
                     return False
         
         encrypted_username = encrypt_data(user_data['username'])
-
         encrypted_first_name = encrypt_data(user_data['first_name'])
         encrypted_last_name = encrypt_data(user_data['last_name'])
+        encrypted_role = encrypt_data(user_data['role'])
+        encrypted_registration_date = encrypt_data(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        encrypted_temp_password = encrypt_data("0")
         
-    
         cursor.execute('''
-            INSERT INTO Users (username, password_hash, first_name, last_name, role, registration_date)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO Users (username, password_hash, first_name, last_name, role, registration_date, temp_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             encrypted_username,
             user_data['password_hash'],
             encrypted_first_name,
             encrypted_last_name,
-            user_data['role']
+            encrypted_role,
+            encrypted_registration_date,
+            encrypted_temp_password
         ))
         
         conn.commit()
@@ -99,12 +127,16 @@ def list_users(current_user):
                 decrypted_username = decrypt_data(username)
                 decrypted_first = decrypt_data(first_name)
                 decrypted_last = decrypt_data(last_name)
+                decrypted_role = decrypt_data(role)
+                decrypted_reg_date = decrypt_data(reg_date)
                 full_name = f"{decrypted_first} {decrypted_last}"
             except:
                 decrypted_username = username
+                decrypted_role = role
+                decrypted_reg_date = reg_date
                 full_name = f"{first_name} {last_name}"
             
-            print(f"{decrypted_username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
+            print(f"{decrypted_username:<15} {full_name:<25} {decrypted_role:<15} {decrypted_reg_date:<20}")
         
         close_connection(conn)
         
@@ -119,11 +151,21 @@ def list_system_admins(current_user):
         cursor.execute('''
             SELECT id, username, first_name, last_name, role, registration_date
             FROM Users
-            WHERE role = 'System Admin' AND username != 'super_admin'
             ORDER BY registration_date DESC
         ''')
         
-        users = cursor.fetchall()
+        all_users = cursor.fetchall()
+        users = []
+        
+        for user_id, username, first_name, last_name, role, reg_date in all_users:
+            try:
+                decrypted_username = decrypt_data(username)
+                decrypted_role = decrypt_data(role)
+                if decrypted_role == 'System Admin' and decrypted_username != 'super_admin':
+                    users.append((user_id, username, first_name, last_name, role, reg_date))
+            except:
+                if role == 'System Admin' and username != 'super_admin':
+                    users.append((user_id, username, first_name, last_name, role, reg_date))
         
         if not users:
             print("No System Administrators found in the system.")
@@ -141,12 +183,16 @@ def list_system_admins(current_user):
                 decrypted_username = decrypt_data(username)
                 decrypted_first = decrypt_data(first_name)
                 decrypted_last = decrypt_data(last_name)
+                decrypted_role = decrypt_data(role)
+                decrypted_reg_date = decrypt_data(reg_date)
                 full_name = f"{decrypted_first} {decrypted_last}"
             except:
                 decrypted_username = username
+                decrypted_role = role
+                decrypted_reg_date = reg_date
                 full_name = f"{first_name} {last_name}"
             
-            print(f"{user_id:<5} {decrypted_username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
+            print(f"{user_id:<5} {decrypted_username:<15} {full_name:<25} {decrypted_role:<15} {decrypted_reg_date:<20}")
         
         close_connection(conn)
         
@@ -161,11 +207,20 @@ def list_service_engineers(current_user):
         cursor.execute('''
             SELECT id, username, first_name, last_name, role, registration_date
             FROM Users
-            WHERE role = 'Service Engineer'
             ORDER BY registration_date DESC
         ''')
         
-        users = cursor.fetchall()
+        all_users = cursor.fetchall()
+        users = []
+        
+        for user_id, username, first_name, last_name, role, reg_date in all_users:
+            try:
+                decrypted_role = decrypt_data(role)
+                if decrypted_role == 'Service Engineer':
+                    users.append((user_id, username, first_name, last_name, role, reg_date))
+            except:
+                if role == 'Service Engineer':
+                    users.append((user_id, username, first_name, last_name, role, reg_date))
         
         if not users:
             print("📋 No Service Engineers found in the system.")
@@ -182,12 +237,16 @@ def list_service_engineers(current_user):
                 decrypted_username = decrypt_data(username)
                 decrypted_first = decrypt_data(first_name)
                 decrypted_last = decrypt_data(last_name)
+                decrypted_role = decrypt_data(role)
+                decrypted_reg_date = decrypt_data(reg_date)
                 full_name = f"{decrypted_first} {decrypted_last}"
             except:
                 decrypted_username = username
+                decrypted_role = role
+                decrypted_reg_date = reg_date
                 full_name = f"{first_name} {last_name}"
             
-            print(f"{user_id:<5} {decrypted_username:<15} {full_name:<25} {role:<15} {reg_date:<20}")
+            print(f"{user_id:<5} {decrypted_username:<15} {full_name:<25} {decrypted_role:<15} {decrypted_reg_date:<20}")
         
         close_connection(conn)
         
@@ -208,22 +267,24 @@ def delete_user_by_id(user_id, current_user, allowed_role=None):
         
         username, role = user_info
         
-        if username == 'super_admin':
+        try:
+            decrypted_username = decrypt_data(username)
+            decrypted_role = decrypt_data(role)
+        except:
+            decrypted_username = username
+            decrypted_role = role
+        
+        if decrypted_username == 'super_admin' or username == 'super_admin':
             print(f"No user found with ID {user_id}")
             log_action(current_user, f"Attempted to delete super_admin - BLOCKED")
             return False
         
-        if allowed_role and role != allowed_role:
-            try:
-                decrypted_username = decrypt_data(username)
-            except:
-                decrypted_username = username
-            
+        if allowed_role and decrypted_role != allowed_role:
             print(f"No user found with ID {user_id}")
-            log_action(current_user, f"Attempted to delete {role} user {decrypted_username} - BLOCKED (wrong role)")
+            log_action(current_user, f"Attempted to delete {decrypted_role} user {decrypted_username} - BLOCKED (wrong role)")
             return False
         
-        if current_user != 'super_admin' and role == 'System Admin':
+        if current_user != 'super_admin' and decrypted_role == 'System Admin':
             current_user_id = get_current_user_id(current_user)
             if user_id != current_user_id:
                 try:
@@ -244,8 +305,8 @@ def delete_user_by_id(user_id, current_user, allowed_role=None):
                 decrypted_username = username
             
             conn.commit()
-            log_action(current_user, f"Deleted {role} user: {decrypted_username}")
-            print(f"User {decrypted_username} ({role}) deleted successfully!")
+            log_action(current_user, f"Deleted {decrypted_role} user: {decrypted_username}")
+            print(f"User {decrypted_username} ({decrypted_role}) deleted successfully!")
             return True
         else:
             print(f"Failed to delete user with ID {user_id}")
@@ -262,22 +323,24 @@ def validate_user_exists_with_role(user_id, required_role):
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT username, role FROM Users WHERE id = ? AND role = ?', (user_id, required_role))
+        cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
         user_info = cursor.fetchone()
         
         if not user_info:
-            cursor.execute('SELECT username, role FROM Users WHERE id = ?', (user_id,))
-            user_exists = cursor.fetchone()
-            
-            if not user_exists:
-                print(f"No user found with ID {user_id}")
-                return False, None, None
-            else:
-                print(f"No user found with ID {user_id}")
-                return False, None, None
+            print(f"No user found with ID {user_id}")
+            return False, None, None
         
         username, role = user_info
-        return True, username, role
+        try:
+            decrypted_role = decrypt_data(role)
+        except:
+            decrypted_role = role
+        
+        if decrypted_role != required_role:
+            print(f"No user found with ID {user_id}")
+            return False, None, None
+        
+        return True, username, decrypted_role
         
     except Exception as e:
         print(f"Error validating user: {e}")
@@ -300,7 +363,12 @@ def update_user_by_id(user_id, update_data, current_user, role):
             print(f"No user found with ID {user_id}")
             return False, None
         
-        if user[2] != role:
+        try:
+            decrypted_user_role = decrypt_data(user[2])
+        except:
+            decrypted_user_role = user[2]
+        
+        if decrypted_user_role != role:
             print(f"No user found with ID {user_id}")
             return False, None
         
@@ -354,7 +422,7 @@ def update_user_by_id(user_id, update_data, current_user, role):
         from system_logging import log_action
         log_action(current_user, f"Updated {role} with ID {user_id}")
         
-        print(f"✅ {role} updated successfully!")
+        print(f"{role} updated successfully!")
         return True, new_username
         
     except Exception as e:
@@ -400,16 +468,23 @@ def reset_user_password(user_id, current_user):
         
         username, role = user_info
         
+        try:
+            decrypted_role = decrypt_data(role)
+        except:
+            decrypted_role = role
+        
         temp_password = generate_temporary_password()
         
         from authentication import hash_password
         hashed_temp_password = hash_password(temp_password)
+        # password_hash is already a bcrypt hash, don't encrypt it
+        encrypted_temp_password = encrypt_data("1")
         
         cursor.execute('''
             UPDATE Users 
-            SET password_hash = ?, temp_password = 1
+            SET password_hash = ?, temp_password = ?
             WHERE id = ?
-        ''', (hashed_temp_password, user_id))
+        ''', (hashed_temp_password, encrypted_temp_password, user_id))
         
         if cursor.rowcount > 0:
             conn.commit()
@@ -419,11 +494,11 @@ def reset_user_password(user_id, current_user):
             except:
                 decrypted_username = username
             
-            log_action(current_user, f"Reset password for {role}: {decrypted_username}")
+            log_action(current_user, f"Reset password for {decrypted_role}: {decrypted_username}")
             
-            print(f"✅ Password reset successfully for {decrypted_username} ({role})")
-            print(f"🔑 Temporary password: {temp_password}")
-            print(f"⚠️  User must change password on next login!")
+            print(f"Password reset successfully for {decrypted_username} ({decrypted_role})")
+            print(f"Temporary password: {temp_password}")
+            print(f" User must change password on next login!")
             return True
         else:
             print(f"ERROR: Failed to reset password for user ID {user_id}")
@@ -459,11 +534,14 @@ def update_user_password(username, new_password_hash, current_user):
             print(f"User not found.")
             return False
         
+        # password_hash is already a bcrypt hash, don't encrypt it
+        encrypted_temp_password = encrypt_data("0")
+        
         cursor.execute('''
             UPDATE Users 
-            SET password_hash = ?, temp_password = 0
+            SET password_hash = ?, temp_password = ?
             WHERE id = ?
-        ''', (new_password_hash, user_id))
+        ''', (new_password_hash, encrypted_temp_password, user_id))
         
         if cursor.rowcount > 0:
             conn.commit()
@@ -520,25 +598,29 @@ def create_traveller(traveller_data):
         encrypted_zip = encrypt_data(traveller_data['zip_code'])
         encrypted_city = encrypt_data(traveller_data['city'])
         encrypted_license = encrypt_data(traveller_data['driving_license'])
+        encrypted_birthday = encrypt_data(traveller_data['birthday'])
+        encrypted_gender = encrypt_data(traveller_data['gender'])
+        encrypted_registration_date = encrypt_data(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
         cursor.execute('''
             INSERT INTO Travellers (
                 first_name, last_name, birthday, gender, street_name, house_number,
                 zip_code, city, email, mobile_phone, driving_license, registration_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             encrypted_first_name,
             encrypted_last_name,
-            traveller_data['birthday'],
-            traveller_data['gender'],
+            encrypted_birthday,
+            encrypted_gender,
             encrypted_street,
             encrypted_house,
             encrypted_zip,
             encrypted_city,
             encrypted_email,
             encrypted_phone,
-            encrypted_license
+            encrypted_license,
+            encrypted_registration_date
         ))
         
         conn.commit()
@@ -586,6 +668,7 @@ def list_travellers():
                 decrypted_zip = decrypt_data(zip_code)
                 decrypted_city = decrypt_data(city)
                 decrypted_license = decrypt_data(license)
+                decrypted_reg_date = decrypt_data(reg_date)
                 
                 full_name = f"{decrypted_first} {decrypted_last}"
                 address = f"{decrypted_street} {decrypted_house}, {decrypted_zip} {decrypted_city}"
@@ -595,8 +678,9 @@ def list_travellers():
                 decrypted_phone = phone
                 address = f"{street} {house}, {zip_code} {city}"
                 decrypted_license = license
+                decrypted_reg_date = reg_date
             
-            print(f"{traveller_id:<5} {full_name:<25} {decrypted_email:<25} {decrypted_phone:<15} {address:<30} {decrypted_license:<15} {reg_date:<20}")
+            print(f"{traveller_id:<5} {full_name:<25} {decrypted_email:<25} {decrypted_phone:<15} {address:<30} {decrypted_license:<15} {decrypted_reg_date:<20}")
         
         close_connection(conn)
         
@@ -708,19 +792,21 @@ def search_travellers(search_term):
   
             if match_found:
                 try:
-                    display_first = decrypt_data(first_name) if decrypt_data(first_name) else "Encrypted"
-                    display_last = decrypt_data(last_name) if decrypt_data(last_name) else "Encrypted"
-                    display_email = decrypt_data(email) if decrypt_data(email) else "Encrypted"
-                    display_phone = decrypt_data(phone) if decrypt_data(phone) else "Encrypted"
+                    display_first = decrypt_data(first_name)
+                    display_last = decrypt_data(last_name)
+                    display_email = decrypt_data(email)
+                    display_phone = decrypt_data(phone)
+                    display_reg_date = decrypt_data(reg_date)
                 except:
-                    display_first = "Encrypted"
-                    display_last = "Encrypted"
-                    display_email = "Encrypted"
-                    display_phone = "Encrypted"
+                    display_first = first_name if first_name else "Encrypted"
+                    display_last = last_name if last_name else "Encrypted"
+                    display_email = email if email else "Encrypted"
+                    display_phone = phone if phone else "Encrypted"
+                    display_reg_date = reg_date if reg_date else "Encrypted"
                 
                 matching_travellers.append((
                     traveller_id, display_first, display_last, 
-                    display_email, display_phone, reg_date
+                    display_email, display_phone, display_reg_date
                 ))
 
         if matching_travellers:
@@ -762,11 +848,12 @@ def update_traveller(traveller_id, update_data):
             return False
 
         encrypted_fields = ['first_name', 'last_name', 'email', 'mobile_phone', 
-                           'street_name', 'house_number', 'zip_code', 'city', 'driving_license']
+                           'street_name', 'house_number', 'zip_code', 'city', 'driving_license',
+                           'birthday', 'gender', 'registration_date']
         
         for field in encrypted_fields:
             if field in update_data:
-                update_data[field] = encrypt_data(update_data[field])
+                update_data[field] = encrypt_data(str(update_data[field]))
 
         set_clauses = []
         values = []
@@ -845,6 +932,15 @@ def create_scooter(scooter_data):
         encrypted_serial = encrypt_data(scooter_data['serial_number'])
         encrypted_latitude = encrypt_data(str(scooter_data['latitude']))
         encrypted_longitude = encrypt_data(str(scooter_data['longitude']))
+        encrypted_top_speed = encrypt_data(str(scooter_data['top_speed']))
+        encrypted_battery_capacity = encrypt_data(str(scooter_data['battery_capacity']))
+        encrypted_state_of_charge = encrypt_data(str(scooter_data['state_of_charge']))
+        encrypted_target_range_min = encrypt_data(str(scooter_data['target_range_min']))
+        encrypted_target_range_max = encrypt_data(str(scooter_data['target_range_max']))
+        encrypted_out_of_service = encrypt_data(str(scooter_data['out_of_service']))
+        encrypted_mileage = encrypt_data(str(scooter_data['mileage']))
+        encrypted_last_maintenance_date = encrypt_data(str(scooter_data['last_maintenance_date']))
+        encrypted_in_service_date = encrypt_data(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         
         cursor.execute('''
             INSERT INTO Scooters (
@@ -852,21 +948,22 @@ def create_scooter(scooter_data):
                 target_range_min, target_range_max, latitude, longitude, out_of_service,
                 mileage, last_maintenance_date, in_service_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             encrypted_brand,
             encrypted_model,
             encrypted_serial,
-            scooter_data['top_speed'],
-            scooter_data['battery_capacity'],
-            scooter_data['state_of_charge'],
-            scooter_data['target_range_min'],
-            scooter_data['target_range_max'],
+            encrypted_top_speed,
+            encrypted_battery_capacity,
+            encrypted_state_of_charge,
+            encrypted_target_range_min,
+            encrypted_target_range_max,
             encrypted_latitude,
             encrypted_longitude,
-            scooter_data['out_of_service'],
-            scooter_data['mileage'],
-            scooter_data['last_maintenance_date']
+            encrypted_out_of_service,
+            encrypted_mileage,
+            encrypted_last_maintenance_date,
+            encrypted_in_service_date
         ))
         
         conn.commit()
@@ -909,19 +1006,27 @@ def list_scooters():
                 decrypted_serial = decrypt_data(serial)
                 decrypted_lat = decrypt_data(lat)
                 decrypted_lon = decrypt_data(lon)
+                decrypted_soc = decrypt_data(str(soc))
+                decrypted_out_of_service = decrypt_data(str(out_of_service))
+                decrypted_in_service = decrypt_data(in_service)
              
                 display_brand = decrypted_brand if decrypted_brand else "Encrypted"
                 display_model = decrypted_model if decrypted_model else "Encrypted"
                 display_serial = decrypted_serial if decrypted_serial else "Encrypted"
                 location = f"{decrypted_lat}, {decrypted_lon}" if decrypted_lat and decrypted_lon else "Encrypted"
+                display_soc = decrypted_soc if decrypted_soc else str(soc)
+                status = "Out of Service" if decrypted_out_of_service == "1" or decrypted_out_of_service == "True" else "Active"
+                display_in_service = decrypted_in_service if decrypted_in_service else in_service
             except:
                 display_brand = "Encrypted"
                 display_model = "Encrypted"
                 display_serial = "Encrypted"
                 location = "Encrypted"
+                display_soc = str(soc)
+                status = "Out of Service" if out_of_service else "Active"
+                display_in_service = in_service
             
-            status = "Out of Service" if out_of_service else "Active"
-            print(f"{scooter_id:<5} {display_brand:<15} {display_model:<20} {display_serial:<15} {soc}%{'':<4} {location:<20} {status:<12} {in_service:<20}")
+            print(f"{scooter_id:<5} {display_brand:<15} {display_model:<20} {display_serial:<15} {display_soc}%{'':<4} {location:<20} {status:<12} {display_in_service:<20}")
         
         close_connection(conn)
         
@@ -999,21 +1104,28 @@ def search_scooters(search_term):
             
             if match_found:
                 try:
-                    display_brand = decrypt_data(brand) if decrypt_data(brand) else "Encrypted"
-                    display_model = decrypt_data(model) if decrypt_data(model) else "Encrypted"
-                    display_serial = decrypt_data(serial) if decrypt_data(serial) else "Encrypted"
-                    display_lat = decrypt_data(lat) if decrypt_data(lat) else "Encrypted"
-                    display_lon = decrypt_data(lon) if decrypt_data(lon) else "Encrypted"
+                    display_brand = decrypt_data(brand)
+                    display_model = decrypt_data(model)
+                    display_serial = decrypt_data(serial)
+                    display_lat = decrypt_data(lat)
+                    display_lon = decrypt_data(lon)
+                    display_soc = decrypt_data(str(soc))
+                    decrypted_out_of_service = decrypt_data(str(out_of_service))
+                    display_in_service = decrypt_data(in_service)
+                    display_status = "Out of Service" if (decrypted_out_of_service == "1" or decrypted_out_of_service == "True") else "Active"
                 except:
-                    display_brand = "Encrypted"
-                    display_model = "Encrypted"
-                    display_serial = "Encrypted"
-                    display_lat = "Encrypted"
-                    display_lon = "Encrypted"
+                    display_brand = brand if brand else "Encrypted"
+                    display_model = model if model else "Encrypted"
+                    display_serial = serial if serial else "Encrypted"
+                    display_lat = lat if lat else "Encrypted"
+                    display_lon = lon if lon else "Encrypted"
+                    display_soc = str(soc) if soc else "0"
+                    display_status = "Out of Service" if out_of_service else "Active"
+                    display_in_service = in_service if in_service else "Encrypted"
                 
                 matching_scooters.append((
-                    scooter_id, display_brand, display_model, display_serial, soc, out_of_service, 
-                    display_lat, display_lon, in_service
+                    scooter_id, display_brand, display_model, display_serial, display_soc, display_status, 
+                    display_lat, display_lon, display_in_service
                 ))
         
         if matching_scooters:
@@ -1024,8 +1136,7 @@ def search_scooters(search_term):
             print(f"{'ID':<5} {'Brand':<15} {'Model':<20} {'Serial':<15} {'SoC':<5} {'Location':<20} {'Status':<12} {'In Service':<20}")
             print("-" * 120)
             
-            for scooter_id, brand, model, serial, soc, out_of_service, lat, lon, in_service in matching_scooters:
-                status = "Out of Service" if out_of_service else "Active"
+            for scooter_id, brand, model, serial, soc, status, lat, lon, in_service in matching_scooters:
                 location = f"{lat}, {lon}" if lat != "Encrypted" and lon != "Encrypted" else "Encrypted"
                 print(f"{scooter_id:<5} {brand:<15} {model:<20} {serial:<15} {soc}%{'':<4} {location:<20} {status:<12} {in_service:<20}")
         else:
@@ -1055,16 +1166,15 @@ def update_scooter(scooter_id, update_data):
             return False
         set_clauses = []
         values = []
-        encrypted_fields = ['brand', 'model', 'serial_number', 'latitude', 'longitude']
+        encrypted_fields = ['brand', 'model', 'serial_number', 'latitude', 'longitude',
+                           'top_speed', 'battery_capacity', 'state_of_charge',
+                           'target_range_min', 'target_range_max', 'out_of_service',
+                           'mileage', 'last_maintenance_date', 'in_service_date']
         
         for field, value in update_data.items():
-            if field in encrypted_fields:
-                encrypted_value = encrypt_data(str(value))
-                set_clauses.append(f"{field} = ?")
-                values.append(encrypted_value)
-            else:
-                set_clauses.append(f"{field} = ?")
-                values.append(value)
+            encrypted_value = encrypt_data(str(value))
+            set_clauses.append(f"{field} = ?")
+            values.append(encrypted_value)
         
         values.append(scooter_id)
         

@@ -248,11 +248,8 @@ def update_system_admin_menu(current_user):
     print("NOTE: Super Admin account (ID 1) is protected and cannot be updated!")
     print()
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("System Admin",))
-    count = cursor.fetchone()[0]
-    close_connection(conn)
+    from crud_operations import count_users_by_role
+    count = count_users_by_role("System Admin")
     
     if count == 0:
         print("No System Administrators found in the system.")
@@ -343,6 +340,7 @@ def update_my_account_menu(current_user):
         print("ERROR: Could not find your user account in session.")
         return current_user
     
+    from encryption import decrypt_data
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT role FROM Users WHERE id = ?', (user_id,))
@@ -353,7 +351,10 @@ def update_my_account_menu(current_user):
         print("ERROR: Could not find your user account in database.")
         return current_user
     
-    user_role = user_data[0]
+    try:
+        user_role = decrypt_data(user_data[0])
+    except:
+        user_role = user_data[0]
     
     print("\n" + "=" * 50)
     print("    UPDATE MY ACCOUNT")
@@ -451,11 +452,8 @@ def update_service_engineer_menu(current_user):
     print("WARNING: This will update user information!")
     print()
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("Service Engineer",))
-    count = cursor.fetchone()[0]
-    close_connection(conn)
+    from crud_operations import count_users_by_role
+    count = count_users_by_role("Service Engineer")
     
     if count == 0:
         print("No Service Engineers found in the system.")
@@ -1616,7 +1614,13 @@ def delete_my_account_menu(current_user):
     
     user_id, user_role = user_data
     
-    if user_role == "Super Admin":
+    try:
+        from encryption import decrypt_data
+        decrypted_role = decrypt_data(user_role)
+    except:
+        decrypted_role = user_role
+    
+    if decrypted_role == "Super Admin":
         print("ERROR: Operation not permitted.")
         print("This is a security measure to prevent system lockout.")
         return
@@ -1632,7 +1636,7 @@ def delete_my_account_menu(current_user):
         print("Account deletion cancelled.")
         return
     
-    if delete_user_by_id(user_id, current_user, user_role):
+    if delete_user_by_id(user_id, current_user, decrypted_role):
         print("Your account has been deleted successfully!")
         print("The system will now close.")
         sys.exit(0)
@@ -1649,11 +1653,8 @@ def delete_system_admin():
     print("Super Admin account cannot be deleted.")
     print()
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("System Admin",))
-    count = cursor.fetchone()[0]
-    close_connection(conn)
+    from crud_operations import count_users_by_role
+    count = count_users_by_role("System Admin")
     
     if count == 0:
         print("No System Administrators found in the system.")
@@ -1686,11 +1687,8 @@ def delete_service_engineer():
     print("WARNING: This action cannot be undone!")
     print()
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("Service Engineer",))
-    count = cursor.fetchone()[0]
-    close_connection(conn)
+    from crud_operations import count_users_by_role
+    count = count_users_by_role("Service Engineer")
     
     if count == 0:
         print("No Service Engineers found in the system.")
@@ -1725,11 +1723,8 @@ def reset_system_admin_password_menu():
     print("The user will be forced to change it on next login.")
     print()
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("System Admin",))
-    count = cursor.fetchone()[0]
-    close_connection(conn)
+    from crud_operations import count_users_by_role
+    count = count_users_by_role("System Admin")
     
     if count == 0:
         print("No System Administrators found in the system.")
@@ -1781,11 +1776,8 @@ def reset_service_engineer_password_menu():
     print("The user will be forced to change it on next login.")
     print()
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users WHERE role = ?', ("Service Engineer",))
-    count = cursor.fetchone()[0]
-    close_connection(conn)
+    from crud_operations import count_users_by_role
+    count = count_users_by_role("Service Engineer")
     
     if count == 0:
         print("No Service Engineers found in the system.")
@@ -1857,14 +1849,24 @@ def generate_restore_code_menu(username):
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, username, first_name, last_name
+            SELECT id, username, first_name, last_name, role
             FROM Users
-            WHERE role = 'System Admin' AND username != 'super_admin'
             ORDER BY registration_date DESC
         ''')
         
-        system_admins = cursor.fetchall()
+        all_users = cursor.fetchall()
         close_connection(conn)
+        
+        system_admins = []
+        for user_id, username, first_name, last_name, role in all_users:
+            try:
+                decrypted_username = decrypt_data(username)
+                decrypted_role = decrypt_data(role)
+                if decrypted_role == 'System Admin' and decrypted_username != 'super_admin':
+                    system_admins.append((user_id, username, first_name, last_name))
+            except:
+                if role == 'System Admin' and username != 'super_admin':
+                    system_admins.append((user_id, username, first_name, last_name))
         
         if not system_admins:
             print("No System Administrators found in the system.")

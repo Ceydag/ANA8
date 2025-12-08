@@ -76,24 +76,49 @@ def initialize_db():
     )
     ''')
 
-    cursor.execute("SELECT COUNT(*) FROM Users WHERE username = 'super_admin'")
-    admin_already_exists = cursor.fetchone()[0] > 0
-
-    import bcrypt
-    salt = bcrypt.gensalt()
-    super_admin_password = bcrypt.hashpw('Admin_123?'.encode('utf-8'), salt)
-    cursor.execute('''
-    INSERT OR IGNORE INTO Users (username, password_hash, role, first_name, last_name, registration_date)
-    VALUES (?, ?, ?, ?, ?, datetime('now'))
-    ''', ('super_admin', super_admin_password, 'Super Admin', 'Super', 'Administrator'))
-
+    from encryption import encrypt_data
+    from datetime import datetime
     
-    conn.commit()
+    # Check if super_admin exists (check both encrypted and unencrypted)
+    cursor.execute('SELECT username FROM Users')
+    all_usernames = cursor.fetchall()
+    admin_already_exists = False
+    for (username,) in all_usernames:
+        try:
+            decrypted = decrypt_data(username)
+            if decrypted == 'super_admin':
+                admin_already_exists = True
+                break
+        except:
+            if username == 'super_admin':
+                admin_already_exists = True
+                break
+
+    if not admin_already_exists:
+        import bcrypt
+        salt = bcrypt.gensalt()
+        super_admin_password = bcrypt.hashpw('Admin_123?'.encode('utf-8'), salt)
+        
+        encrypted_username = encrypt_data('super_admin')
+        encrypted_role = encrypt_data('Super Admin')
+        encrypted_first_name = encrypt_data('Super')
+        encrypted_last_name = encrypt_data('Administrator')
+        encrypted_registration_date = encrypt_data(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        encrypted_temp_password = encrypt_data("0")
+        
+        cursor.execute('''
+        INSERT INTO Users (username, password_hash, role, first_name, last_name, registration_date, temp_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (encrypted_username, super_admin_password, encrypted_role, encrypted_first_name, encrypted_last_name, encrypted_registration_date, encrypted_temp_password))
+        
+        conn.commit()
+    
     conn.close()
 
-    if not db_already_exists or not admin_already_exists:
+    if not db_already_exists:
         print("Database initialized successfully!")
-        print("Super Admin account created")
+        if not admin_already_exists:
+            print("Super Admin account created")
 
 def get_connection():
     try:

@@ -56,15 +56,26 @@ def generate_restore_code(system_admin_username, backup_filename):
         
         user_id, encrypted_username, role = user_found
         
-        if role != 'System Admin':
+        try:
+            decrypted_role = decrypt_data(role)
+        except:
+            decrypted_role = role
+        
+        if decrypted_role != 'System Admin':
             print(f"User {system_admin_username} is not a System Admin")
             close_connection(conn)
             return None
         
+        from encryption import encrypt_data
+        encrypted_code = encrypt_data(restore_code)
+        encrypted_backup_filename = encrypt_data(backup_filename)
+        encrypted_created_date = encrypt_data(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        encrypted_used = encrypt_data("0")
+        
         cursor.execute('''
-        INSERT INTO RestoreCodes (code, system_admin_username, backup_filename, created_date)
-        VALUES (?, ?, ?, datetime('now'))
-        ''', (restore_code, encrypted_username, backup_filename))
+        INSERT INTO RestoreCodes (code, system_admin_username, backup_filename, created_date, used)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (encrypted_code, encrypted_username, encrypted_backup_filename, encrypted_created_date, encrypted_used))
         
         conn.commit()
         close_connection(conn)
@@ -103,12 +114,24 @@ def restore_backup(restore_code, username):
             return False
         
         cursor.execute('''
-        SELECT backup_filename, system_admin_username, used 
+        SELECT code, backup_filename, system_admin_username, used 
         FROM RestoreCodes 
-        WHERE code = ? AND system_admin_username = ?
-        ''', (restore_code, encrypted_username))
+        WHERE system_admin_username = ?
+        ''', (encrypted_username,))
         
-        result = cursor.fetchone()
+        all_codes = cursor.fetchall()
+        result = None
+        
+        for code, backup_filename, admin_username, used in all_codes:
+            try:
+                decrypted_code = decrypt_data(code)
+                if decrypted_code == restore_code:
+                    result = (backup_filename, admin_username, used)
+                    break
+            except:
+                if code == restore_code:
+                    result = (backup_filename, admin_username, used)
+                    break
         
         if not result:
             print("Invalid restore code or unauthorized user")
@@ -116,27 +139,57 @@ def restore_backup(restore_code, username):
         
         backup_filename, admin_username, used = result
         
-        if used:
+        try:
+            decrypted_used = decrypt_data(str(used))
+            is_used = decrypted_used == "1" or decrypted_used == "True" or used == 1
+        except:
+            is_used = used == 1 or used == "1"
+        
+        if is_used:
             print("Restore code has already been used")
             return False
         
-        if not os.path.exists(backup_filename):
-            print(f"Backup file not found: {backup_filename}")
+        try:
+            decrypted_backup_filename = decrypt_data(backup_filename)
+        except:
+            decrypted_backup_filename = backup_filename
+        
+        if not os.path.exists(decrypted_backup_filename):
+            print(f"Backup file not found: {decrypted_backup_filename}")
             return False
         
-        with zipfile.ZipFile(backup_filename, 'r') as backup_zip:
+        with zipfile.ZipFile(decrypted_backup_filename, 'r') as backup_zip:
             backup_zip.extractall('.')
         
-        cursor.execute('''
-        UPDATE RestoreCodes 
-        SET used = 1 
-        WHERE code = ?
-        ''', (restore_code,))
+        from encryption import encrypt_data
+        encrypted_used = encrypt_data("1")
+        
+        # Find the code again to update it
+        cursor.execute('SELECT code FROM RestoreCodes WHERE system_admin_username = ?', (encrypted_username,))
+        all_codes = cursor.fetchall()
+        matching_code = None
+        for (code,) in all_codes:
+            try:
+                decrypted_code = decrypt_data(code)
+                if decrypted_code == restore_code:
+                    matching_code = code
+                    break
+            except:
+                if code == restore_code:
+                    matching_code = code
+                    break
+        
+        if matching_code:
+            cursor.execute('''
+            UPDATE RestoreCodes 
+            SET used = ? 
+            WHERE code = ?
+            ''', (encrypted_used, matching_code))
         
         conn.commit()
         close_connection(conn)
         
-        print(f"Database restored successfully from {backup_filename}")
+        print(f"Database restored successfully from {decrypted_backup_filename}")
         return True
         
     except Exception as e:
@@ -156,15 +209,27 @@ def revoke_restore_code(restore_code):
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT code FROM RestoreCodes WHERE code = ?', (restore_code,))
-        existing_code = cursor.fetchone()
+        cursor.execute('SELECT code FROM RestoreCodes')
+        all_codes = cursor.fetchall()
         
-        if not existing_code:
+        matching_code = None
+        for (code,) in all_codes:
+            try:
+                decrypted_code = decrypt_data(code)
+                if decrypted_code == restore_code:
+                    matching_code = code
+                    break
+            except:
+                if code == restore_code:
+                    matching_code = code
+                    break
+        
+        if not matching_code:
             print(f"Restore code {restore_code} does not exist")
             close_connection(conn)
             return False
         
-        cursor.execute('DELETE FROM RestoreCodes WHERE code = ?', (restore_code,))
+        cursor.execute('DELETE FROM RestoreCodes WHERE code = ?', (matching_code,))
         conn.commit()
         close_connection(conn)
         
@@ -198,12 +263,21 @@ def list_restore_codes():
         
         for code, admin, backup, created, used in results:
             try:
+                decrypted_code = decrypt_data(code)
                 decrypted_admin = decrypt_data(admin)
+                decrypted_backup = decrypt_data(backup)
+                decrypted_created = decrypt_data(created)
+                decrypted_used = decrypt_data(str(used))
+                is_used = decrypted_used == "1" or decrypted_used == "True"
             except:
+                decrypted_code = code
                 decrypted_admin = admin
+                decrypted_backup = backup
+                decrypted_created = created
+                is_used = used == 1 or used == "1"
             
-            status = "Yes" if used else "No"
-            print(f"{code:<10} {decrypted_admin:<15} {backup:<20} {created:<20} {status:<5}")
+            status = "Yes" if is_used else "No"
+            print(f"{decrypted_code:<10} {decrypted_admin:<15} {decrypted_backup:<20} {decrypted_created:<20} {status:<5}")
         
     except Exception as e:
         print(f"Error listing restore codes: {e}")

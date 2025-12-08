@@ -2,21 +2,25 @@ import re
 from datetime import datetime
 from system_logging import log_validation_failure, log_all_validation_attempts
 
+def is_valid(value, pattern):
+    """Strict validation helper: checks pattern match and null bytes"""
+    return re.match(pattern, value) and "\x00" not in value
+
 class InputValidator:
     def __init__(self):
         self.PATTERNS = {
-            'username': r'^[a-zA-Z_][a-zA-Z0-9_\'\.]{7,9}$',
+            'username': r'^(?!.*[_.]{2})[a-zA-Z_](?:[\w.\'-]{7,9})$',
             'password': r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[~!@#$%&_\-+=`|\\(){}\[\]:;\'<>,.?/])[A-Za-z\d~!@#$%&_\-+=`|\\(){}\[\]:;\'<>,.?/]{12,30}$',
-            'email': r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+            'email': r'^[a-zA-Z0-9_.+-]{1,64}@[a-zA-Z0-9-]{1,255}\.[a-zA-Z]{2,24}$',
             'phone': r'^\d{8}$',
-            'zip_code': r'^\d{4}[A-Z]{2}$',
+            'zip_code': r'^[1-9][0-9]{3}\s?[a-zA-Z]{2}$',
             'driving_license': r'^[A-Z]{1,2}\d{7,8}$',
             'date_iso': r'^\d{4}-\d{2}-\d{2}$',
-            'name': r'^[a-zA-Z\s\'-]{2,50}$',
+            'name': r'^[a-zA-Z]{2,20}$',
             'serial_number': r'^[A-Za-z0-9]{10,17}$',
             'brand_model': r'^[a-zA-Z0-9\s\-\.]{2,50}$',
-            'street': r'^[a-zA-Z0-9\s\'-\.]{2,100}$',
-            'house_number': r'^[a-zA-Z0-9\s\-]{1,10}$',
+            'street': r'^[a-zA-Z0-9\s]{2,30}$',
+            'house_number': r'^[1-9][0-9]{0,3}[a-zA-Z]{0,1}$',
         }
     
         self.CITIES = ['Rotterdam', 'Amsterdam', 'Utrecht', 'The Hague', 'Eindhoven', 'Tilburg', 'Groningen', 'Almere', 'Breda', 'Nijmegen']
@@ -35,26 +39,25 @@ class InputValidator:
         }
 
     def validate_pattern(self, value, pattern_type, field_name):
+        """Strict pattern validation - no input massaging"""
         if not value:
             return False, f"{field_name} cannot be empty"
-        
-        if '\x00' in value:
-            return False, "Invalid characters detected"
-            
-        if len(value) > 1000:
-            return False, "Input too long"
         
         if pattern_type not in self.PATTERNS:
             return False, f"Unknown validation pattern: {pattern_type}"
         
-        if re.match(self.PATTERNS[pattern_type], value):
+        if is_valid(value, self.PATTERNS[pattern_type]):
             return True, f"Valid {field_name}"
         
         return False, f"Invalid {field_name} format"
 
     def validate_choice(self, value, choices, field_name):
+        """Strict choice validation - exact match only"""
         if not value:
             return False, f"{field_name} cannot be empty"
+        
+        if "\x00" in value:
+            return False, "Invalid characters detected"
         
         if value in choices:
             return True, f"Valid {field_name}"
@@ -62,90 +65,93 @@ class InputValidator:
         return False, f"{field_name} must be one of: {', '.join(choices)}"
 
     def validate_numeric_range(self, value, range_type, field_name):
+        """Strict numeric validation with pattern matching - NO input massaging"""
         if not value:
             return False, f"{field_name} cannot be empty"
         
-        try:
-            num_value = float(value)
-            min_val, max_val = self.RANGES.get(range_type, (None, None))
-            
-            if min_val is not None and max_val is not None:
-                if min_val <= num_value <= max_val:
-                    return True, f"Valid {field_name}"
-                else:
-                    return False, f"{field_name} must be between {min_val} and {max_val}"
-            elif min_val is not None:
-                if num_value >= min_val:
-                    return True, f"Valid {field_name}"
-                else:
-                    return False, f"{field_name} must be at least {min_val}"
-            elif max_val is not None:
-                if num_value <= max_val:
-                    return True, f"Valid {field_name}"
-                else:
-                    return False, f"{field_name} must be at most {max_val}"
-            else:
-                return False, f"Unknown or undefined range type: {range_type}"
-                
-        except ValueError:
-            return False, f"{field_name} must be a valid number"
+        if "\x00" in value:
+            return False, "Invalid characters detected"
+        
+        # Strict numeric patterns encode the valid ranges - no conversion needed
+        numeric_patterns = {
+            'top_speed': r'^(?:[1-9][0-9]?|100)$',  # 1-100
+            'battery_capacity': r'^(?:[1-9][0-9]{0,3}|10000)$',  # 1-10000
+            'state_of_charge': r'^(?:[0-9]|[1-9][0-9]|100)$',  # 0-100
+            'mileage': r'^(?:[0-9]|[1-9][0-9]{1,4}|100000)$'  # 0-100000
+        }
+        
+        pattern = numeric_patterns.get(range_type)
+        if pattern and is_valid(value, pattern):
+            return True, f"Valid {field_name}"
+        
+        return False, f"Invalid {field_name} format"
 
     def validate_date(self, value, field_name):
+        """Strict date validation - NO input massaging"""
         if not value:
             return False, f"{field_name} cannot be empty"
         
-        is_valid, message = self.validate_pattern(value, 'date_iso', field_name)
-        if not is_valid:
-            return False, message
+        if "\x00" in value:
+            return False, "Invalid characters detected"
         
-        try:
-            date_obj = datetime.strptime(value, '%Y-%m-%d')
-            if date_obj <= datetime.now():
-                return True, f"Valid {field_name}"
-            else:
-                return False, f"{field_name} cannot be in the future"
-        except ValueError:
-            return False, f"Invalid {field_name}"
+        # Strict date pattern: YYYY-MM-DD
+        if not is_valid(value, self.PATTERNS['date_iso']):
+            return False, f"Invalid {field_name} format"
+        
+        # Validate date is not in future using string comparison (no conversion)
+        # Format is YYYY-MM-DD, so we can compare lexicographically
+        current_date_str = datetime.now().strftime('%Y-%m-%d')
+        if value <= current_date_str:
+            return True, f"Valid {field_name}"
+        else:
+            return False, f"{field_name} cannot be in the future"
 
     def validate_coordinates(self, latitude, longitude):
+        """Strict coordinate validation - NO input massaging"""
         if not latitude or not longitude:
             return False, "Coordinates cannot be empty"
         
-        try:
-            lat = float(latitude)
-            lon = float(longitude)
-            
-            lat_min, lat_max = self.COORDINATE_BOUNDS['latitude']
-            lon_min, lon_max = self.COORDINATE_BOUNDS['longitude']
-            
-            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
-                if len(str(lat).split('.')[-1]) <= 5 and len(str(lon).split('.')[-1]) <= 5:
-                    return True, "Valid coordinates"
-                else:
-                    return False, "Coordinates must have maximum 5 decimal places"
-            else:
-                return False, "Coordinates must be within Rotterdam region"
-                
-        except ValueError:
-            return False, "Invalid coordinate format"
+        if "\x00" in latitude or "\x00" in longitude:
+            return False, "Invalid characters detected"
+        
+        # Strict coordinate patterns for Rotterdam region bounds
+        # Latitude: 51.8 to 52.1, Longitude: 4.2 to 4.8
+        # Pattern ensures format and bounds in one strict check (1-5 decimal places)
+        # Latitude: 51.8 to 52.1 (with 1-5 decimal places)
+        lat_pattern = r'^(?:51\.(?:[89]\d{0,4})|52\.(?:[01]\d{0,4}))$'
+        # Longitude: 4.2 to 4.8 (with 1-5 decimal places)
+        lon_pattern = r'^4\.(?:[2-8]\d{0,4})$'
+        
+        if not is_valid(latitude, lat_pattern) or not is_valid(longitude, lon_pattern):
+            return False, "Coordinates must be within Rotterdam region and have valid format"
+        
+        return True, "Valid coordinates"
 
 
 
     def validate_target_range(self, min_range, max_range):
-        try:
-            min_val = float(min_range)
-            max_val = float(max_range)
-            
-            if 0 <= min_val <= 100 and 0 <= max_val <= 100:
-                if min_val < max_val:
-                    return True, "Valid target range"
-                else:
-                    return False, "Minimum range must be less than maximum range"
-            else:
-                return False, "Range values must be between 0-100%"
-                
-        except ValueError:
-            return False, "Target range must be valid numbers"
+        """Strict target range validation - NO input massaging"""
+        if not min_range or not max_range:
+            return False, "Range values cannot be empty"
+        
+        if "\x00" in min_range or "\x00" in max_range:
+            return False, "Invalid characters detected"
+        
+        # Strict percentage pattern: 0-100
+        percent_pattern = r'^(?:[0-9]|[1-9][0-9]|100)$'
+        
+        if not is_valid(min_range, percent_pattern) or not is_valid(max_range, percent_pattern):
+            return False, "Range values must be valid numbers between 0-100"
+        
+        # Check min < max using string comparison (pad to 3 digits for 0-100)
+        # This is validation, not input massaging - we're not modifying the input
+        min_padded = min_range.zfill(3)
+        max_padded = max_range.zfill(3)
+        
+        if min_padded >= max_padded:
+            return False, "Minimum range must be less than maximum range"
+        
+        return True, "Valid target range"
 
 
 class InputCollector:

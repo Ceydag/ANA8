@@ -24,18 +24,21 @@ def authenticate_user(username, password):
         for db_username, stored_password_hash, role, temp_password in all_users:
             try:
                 decrypted_username = decrypt_data(db_username)
+                decrypted_role = decrypt_data(role)
+                decrypted_temp_password = decrypt_data(str(temp_password)) if temp_password else "0"
                 
                 if db_username == 'super_admin' or decrypted_username == 'super_admin':
                     if username == 'super_admin' and password == 'Admin_123?':
                         log_login_attempt(username, True)
-                        create_session(username, role)
-                        return username, role, bool(temp_password)
+                        create_session(username, decrypted_role)
+                        return username, decrypted_role, bool(int(decrypted_temp_password) if decrypted_temp_password.isdigit() else temp_password)
                 
                 if decrypted_username.lower() == username.lower():
+                    # Password hash should NOT be decrypted - it's already a bcrypt hash
                     if verify_password(stored_password_hash, password):
                         log_login_attempt(username, True)
-                        create_session(username, role)
-                        return username, role, bool(temp_password)
+                        create_session(username, decrypted_role)
+                        return username, decrypted_role, bool(int(decrypted_temp_password) if decrypted_temp_password.isdigit() else temp_password)
                     else:
                         break
                         
@@ -187,8 +190,9 @@ def change_password(username):
             return False
    
         hashed_password = hash_password(new_password)
-        cursor.execute('UPDATE Users SET password_hash = ?, temp_password = 0 WHERE id = ?', 
-                      (hashed_password, user_id))
+        encrypted_temp_password = encrypt_data("0")
+        cursor.execute('UPDATE Users SET password_hash = ?, temp_password = ? WHERE id = ?', 
+                      (hashed_password, encrypted_temp_password, user_id))
         conn.commit()
         
         print("Password changed successfully!")
