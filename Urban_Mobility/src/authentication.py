@@ -66,7 +66,7 @@ def logout_user(username):
 
 def login():
     print("\n=== LOGIN ===")
-    username = input("Enter username: ").strip()
+    username = input("Enter username: ")
     password = getpass.getpass("Enter password: ")
     
     auth_result = authenticate_user(username, password)
@@ -141,7 +141,7 @@ def change_password(username):
     cursor = conn.cursor()
     
     try:
-        from encryption import decrypt_data
+        from encryption import decrypt_data, encrypt_data
         
         cursor.execute('SELECT id, username, password_hash FROM Users')
         all_users = cursor.fetchall()

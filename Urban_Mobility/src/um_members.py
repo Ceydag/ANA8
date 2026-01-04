@@ -943,7 +943,7 @@ def add_scooter_menu(current_user="unknown"):
 def search_travellers_menu():
     search_term = collector.get_validated_input(
         "Enter search term (name, email, phone, or traveller ID): ",
-        lambda x: (len(x.strip()) > 0, "Search term cannot be empty") if len(x.strip()) > 0 else (False, "Search term cannot be empty"),
+        lambda x: (len(x) > 0, "Search term cannot be empty") if len(x) > 0 else (False, "Search term cannot be empty"),
         "Search term cannot be empty",
         username="unknown",
         field_name="search_term"
@@ -954,7 +954,7 @@ def search_travellers_menu():
 def search_scooters_menu():
     search_term = collector.get_validated_input(
         "Enter search term (brand, model, or serial number): ",
-        lambda x: (len(x.strip()) > 0, "Search term cannot be empty") if len(x.strip()) > 0 else (False, "Search term cannot be empty"),
+        lambda x: (len(x) > 0, "Search term cannot be empty") if len(x) > 0 else (False, "Search term cannot be empty"),
         "Search term cannot be empty",
         username="unknown",
         field_name="search_term"
@@ -1326,8 +1326,8 @@ def delete_traveller_menu():
         print(f"No traveller found with ID {traveller_id}")
         return
     
-    confirm = input(f"Are you sure you want to delete traveller {traveller_id}? (y/n): ").strip().lower()
-    if confirm == 'y':
+    confirm = input(f"Are you sure you want to delete traveller {traveller_id}? (y/n): ")
+    if confirm.lower() == 'y':
         delete_traveller(traveller_id)
     else:
         print("Deletion cancelled.")
@@ -1378,8 +1378,8 @@ def delete_scooter_menu():
         print(f"No scooter found with ID {scooter_id}")
         return
     
-    confirm = input(f"Are you sure you want to delete scooter {scooter_id}? (y/n): ").strip().lower()
-    if confirm == 'y':
+    confirm = input(f"Are you sure you want to delete scooter {scooter_id}? (y/n): ")
+    if confirm.lower() == 'y':
         delete_scooter(int(scooter_id))
     else:
         print("Deletion cancelled.")
@@ -1577,7 +1577,7 @@ def list_service_engineers():
 def delete_my_account_menu(current_user):
     from database import get_connection, close_connection
     from crud_operations import delete_user_by_id
-    from encryption import encrypt_data
+    from session_management import get_current_user_id
     
     print("\n" + "=" * 60)
     print("    DELETE MY ACCOUNT")
@@ -1586,39 +1586,27 @@ def delete_my_account_menu(current_user):
     print("You will be permanently removed from the system!")
     print()
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    user_id = get_current_user_id(current_user)
     
-    cursor.execute('SELECT id, role FROM Users WHERE username = ?', (current_user,))
-    user_data = cursor.fetchone()
-    
-    if not user_data:
-        from encryption import decrypt_data
-        cursor.execute('SELECT id, username, role FROM Users')
-        all_users = cursor.fetchall()
-        
-        for user_id, encrypted_username, role in all_users:
-            try:
-                decrypted_username = decrypt_data(encrypted_username)
-                if decrypted_username == current_user:
-                    user_data = (user_id, role)
-                    break
-            except:
-                continue
-    
-    close_connection(conn)
-    
-    if not user_data:
+    if not user_id:
         print("ERROR: Could not find your user account.")
         return
     
-    user_id, user_role = user_data
+    from encryption import decrypt_data
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT role FROM Users WHERE id = ?', (user_id,))
+    user_data = cursor.fetchone()
+    close_connection(conn)
+    
+    if not user_data:
+        print("ERROR: Could not find your user account in database.")
+        return
     
     try:
-        from encryption import decrypt_data
-        decrypted_role = decrypt_data(user_role)
+        decrypted_role = decrypt_data(user_data[0])
     except:
-        decrypted_role = user_role
+        decrypted_role = user_data[0]
     
     if decrypted_role == "Super Admin":
         print("ERROR: Operation not permitted.")
@@ -1628,11 +1616,11 @@ def delete_my_account_menu(current_user):
     print("Your Account Information:")
     print(f"Username: {current_user}")
     print(f"User ID: {user_id}")
-    print(f"Role: {user_role}")
+    print(f"Role: {decrypted_role}")
     print()
 
-    confirm = input("Are you sure you want to delete your account? (y/n): ").strip().lower()
-    if confirm != 'y':
+    confirm = input("Are you sure you want to delete your account? (y/n): ")
+    if confirm.lower() != 'y':
         print("Account deletion cancelled.")
         return
     
@@ -1665,7 +1653,7 @@ def delete_system_admin():
     list_system_admins("super_admin")
     
     print("\nEnter the ID of the System Administrator to delete:")
-    user_id = input("User ID: ").strip()
+    user_id = input("User ID: ")
     
     if not user_id:
         print("User ID is required.")
@@ -1699,7 +1687,7 @@ def delete_service_engineer():
     list_service_engineers("super_admin")
     
     print("\nEnter the ID of the Service Engineer to delete:")
-    user_id = input("User ID: ").strip()
+    user_id = input("User ID: ")
     
     if not user_id:
         print("User ID is required.")
@@ -1734,7 +1722,7 @@ def reset_system_admin_password_menu():
     list_system_admins("super_admin")
     
     print("\nEnter the ID of the System Administrator to reset password:")
-    user_id = input("User ID: ").strip()
+    user_id = input("User ID: ")
     
     if not user_id:
         print("User ID is required.")
@@ -1751,8 +1739,8 @@ def reset_system_admin_password_menu():
         print(f"\nWARNING: This will reset the password for System Admin ID {user_id}")
         print("A temporary password will be generated and the user must change it on next login.")
         
-        confirm = input("Are you sure you want to proceed? (y/n): ").strip().lower()
-        if confirm != 'y':
+        confirm = input("Are you sure you want to proceed? (y/n): ")
+        if confirm.lower() != 'y':
             print("Password reset cancelled.")
             return
         
@@ -1787,7 +1775,7 @@ def reset_service_engineer_password_menu():
     list_service_engineers("super_admin")
     
     print("\nEnter the ID of the Service Engineer to reset password:")
-    user_id = input("User ID: ").strip()
+    user_id = input("User ID: ")
     
     if not user_id:
         print("User ID is required.")
@@ -1804,8 +1792,8 @@ def reset_service_engineer_password_menu():
         print(f"\nWARNING: This will reset the password for Service Engineer ID {user_id}")
         print("A temporary password will be generated and the user must change it on next login.")
         
-        confirm = input("Are you sure you want to proceed? (y/n): ").strip().lower()
-        if confirm != 'y':
+        confirm = input("Are you sure you want to proceed? (y/n): ")
+        if confirm.lower() != 'y':
             print("Password reset cancelled.")
             return
         
@@ -1943,7 +1931,7 @@ def generate_restore_code_menu(username):
 def revoke_restore_code_menu(username):
     code = collector.get_validated_input(
         "Enter restore code to revoke: ",
-        lambda x: (len(x.strip()) > 0, "Restore code cannot be empty") if len(x.strip()) > 0 else (False, "Restore code cannot be empty"),
+        lambda x: (len(x) > 0, "Restore code cannot be empty") if len(x) > 0 else (False, "Restore code cannot be empty"),
         "Restore code cannot be empty",
         username=username,
         field_name="restore_code"
@@ -1956,7 +1944,7 @@ def revoke_restore_code_menu(username):
 def restore_backup_menu(username):
     code = collector.get_validated_input(
         "Enter restore code: ",
-        lambda x: (len(x.strip()) > 0, "Restore code cannot be empty") if len(x.strip()) > 0 else (False, "Restore code cannot be empty"),
+        lambda x: (len(x) > 0, "Restore code cannot be empty") if len(x) > 0 else (False, "Restore code cannot be empty"),
         "Restore code cannot be empty",
         username=username,
         field_name="restore_code"

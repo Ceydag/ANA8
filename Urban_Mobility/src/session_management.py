@@ -80,10 +80,25 @@ def get_session_by_username(username):
 def get_session_by_id(session_id):
     return sessions.get(session_id)
 
+def get_any_active_session():
+    """Get any active session - useful when username is unknown"""
+    for session in sessions.values():
+        # Check if value is a Session object (not a string)
+        if isinstance(session, Session):
+            # Check if session is not expired
+            is_expired, _ = session.is_expired()
+            if not is_expired:
+                return session
+    return None
+
 def check_session(username):
     session = get_session_by_username(username)
     if not session:
         return False, "No active session"
+    
+    if not user_exists_in_database(username):
+        terminate_session(username, "User account no longer exists in database")
+        return False, "User account no longer exists in database"
     
     is_expired, reason = session.is_expired()
     if is_expired:
@@ -144,20 +159,25 @@ def display_session_info(username):
 
 
 def handle_suspicious_activity(username, activity_description):
+    # Try to find session by username first
     session = get_session_by_username(username)
-    if not session:
-        return False, "No active session"
     
-    log_action(username, "Suspicious activity detected", activity_description, suspicious=True)
+    # If username is "unknown" or session not found, try to get any active session
+    if not session or username == "unknown":
+        session = get_any_active_session()
+        if not session:
+            return False, "No active session"
+    
+    # Use session username (which is always decrypted) instead of the parameter
+    # This ensures we log the correct decrypted username, not "unknown" or encrypted values
+    log_action(session.username, "Suspicious activity detected", activity_description, suspicious=True)
     
     should_terminate, message = session.add_suspicious_activity()
     if should_terminate:
-        terminate_session(username, message)
+        terminate_session(session.username, message)
         return True, message
     
     return False, message
-
-
 
 def update_session_username(old_username, new_username):
     if old_username in sessions:
@@ -171,6 +191,39 @@ def update_session_username(old_username, new_username):
         return True
     return False
 
+
+def user_exists_in_database(username):
+    """Check if user account exists in database - returns True if exists, False otherwise"""
+    try:
+        from database import get_connection, close_connection
+        from encryption import decrypt_data
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT username FROM Users')
+        all_usernames = cursor.fetchall()
+        
+        for (db_username,) in all_usernames:
+            try:
+                decrypted_username = decrypt_data(db_username)
+                if decrypted_username.lower() == username.lower():
+                    close_connection(conn)
+                    return True
+            except:
+                if db_username == 'super_admin' and username == 'super_admin':
+                    close_connection(conn)
+                    return True
+                if db_username.lower() == username.lower():
+                    close_connection(conn)
+                    return True
+        
+        close_connection(conn)
+        return False
+        
+    except Exception as e:
+        print(f"Error checking if user exists: {e}")
+        return False
 
 def get_current_user_id(username):
     try:

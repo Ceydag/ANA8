@@ -101,16 +101,17 @@ def restore_backup(restore_code, username):
         for user_id, encrypted_user, role in all_users:
             try:
                 decrypted_user = decrypt_data(encrypted_user)
-                if decrypted_user == username:
+                if decrypted_user.lower() == username.lower():
                     encrypted_username = encrypted_user
                     break
             except:
-                if encrypted_user == username:
+                if encrypted_user.lower() == username.lower():
                     encrypted_username = encrypted_user
                     break
         
         if not encrypted_username:
             print("User not found")
+            close_connection(conn)
             return False
         
         cursor.execute('''

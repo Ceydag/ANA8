@@ -87,7 +87,8 @@ def get_logs():
                     if decrypted_log:
                         decrypted_logs.append(decrypted_log)
         
-        return decrypted_logs
+        # Return logs in reverse order (newest first)
+        return list(reversed(decrypted_logs))
     except Exception as e:
         return f"Error retrieving logs: {e}"
 
@@ -255,11 +256,11 @@ def display_logs_paginated(logs=None, page_size=5):
         
         while True:
             try:
-                choice = input("Enter command: ").strip().lower()
+                choice = input("Enter command: ")
                 
-                if choice == 'q':
+                if choice.lower() == 'q':
                     return
-                elif choice == 'v':
+                elif choice.lower() == 'v':
                     show_full_log_details(page_logs)
                     break
                 elif choice == 'n' and current_page < total_pages:
@@ -428,9 +429,9 @@ def display_suspicious_logs_paginated(username, page_size=5):
         
         while True:
             try:
-                choice = input("Enter command: ").strip().lower()
+                choice = input("Enter command: ")
                 
-                if choice == 'q':
+                if choice.lower() == 'q':
                     mark_current_suspicious_as_read(username)
                     print("Suspicious activities marked as read.")
                     return
@@ -462,6 +463,17 @@ def display_suspicious_logs_paginated(username, page_size=5):
                 return
 
 
+def get_current_username_from_session():
+    """Get current logged in username from active session"""
+    try:
+        from session_management import get_any_active_session
+        session = get_any_active_session()
+        if session:
+            return session.username
+    except:
+        pass
+    return "unknown"
+
 def log_validation_failure(username, field_name, input_value, error_message, is_suspicious=False):
     truncated_input = input_value[:100] if len(input_value) > 100 else input_value
     
@@ -470,25 +482,31 @@ def log_validation_failure(username, field_name, input_value, error_message, is_
     if "Max attempts" in error_message and "exceeded" in error_message:
         is_suspicious = True
     
+    # Use session username if username parameter is "unknown"
+    if username == "unknown":
+        username = get_current_username_from_session()
+    
     log_entry = f"Input validation failed - {error_message}"
     additional_info = f"Input: {truncated_input}"
     
     log_action(username, log_entry, additional_info, suspicious_flag or is_suspicious)
 
 def detect_suspicious_input(input_value, field_name="unknown"):
-    input_str = str(input_value).strip()
+    if "\x00" in input_value:
+        return True
     
     always_suspicious_patterns = [
         r"(<script|<iframe|<object|<embed|javascript:)", 
         r"(onload|onerror|onclick|onfocus)",
         r"(\.\./|\.\.\\|%2e%2e)",
+        r"(\\x00|\\0|%00|\\u0000)",
     ]
     
     for pattern in always_suspicious_patterns:
-        if re.search(pattern, input_str, re.IGNORECASE):
+        if re.search(pattern, input_value, re.IGNORECASE):
             return True
     
-    if "'" in input_str or '"' in input_str:
+    if "'" in input_value or '"' in input_value:
         if field_name in ['first_name', 'last_name', 'name']:
             return False
         
@@ -501,6 +519,9 @@ def detect_suspicious_input(input_value, field_name="unknown"):
     return False
 
 def log_all_validation_attempts(username, field_name, input_value, is_valid, error_message=""):
+    if username == "unknown":
+        username = get_current_username_from_session()
+    
     if not is_valid:
         log_validation_failure(username, field_name, input_value, error_message)
     else:
