@@ -87,7 +87,6 @@ def get_logs():
                     if decrypted_log:
                         decrypted_logs.append(decrypted_log)
         
-        # Return logs in reverse order (newest first)
         return list(reversed(decrypted_logs))
     except Exception as e:
         return f"Error retrieving logs: {e}"
@@ -464,7 +463,6 @@ def display_suspicious_logs_paginated(username, page_size=5):
 
 
 def get_current_username_from_session():
-    """Get current logged in username from active session"""
     try:
         from session_management import get_any_active_session
         session = get_any_active_session()
@@ -482,7 +480,6 @@ def log_validation_failure(username, field_name, input_value, error_message, is_
     if "Max attempts" in error_message and "exceeded" in error_message:
         is_suspicious = True
     
-    # Use session username if username parameter is "unknown"
     if username == "unknown":
         username = get_current_username_from_session()
     

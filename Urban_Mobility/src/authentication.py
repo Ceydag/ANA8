@@ -34,7 +34,6 @@ def authenticate_user(username, password):
                         return username, decrypted_role, bool(int(decrypted_temp_password) if decrypted_temp_password.isdigit() else temp_password)
                 
                 if decrypted_username.lower() == username.lower():
-                    # Password hash should NOT be decrypted - it's already a bcrypt hash
                     if verify_password(stored_password_hash, password):
                         log_login_attempt(username, True)
                         create_session(username, decrypted_role)

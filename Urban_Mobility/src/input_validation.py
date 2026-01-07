@@ -3,18 +3,15 @@ from datetime import datetime
 from system_logging import log_validation_failure, log_all_validation_attempts
 
 def is_valid(value, pattern):
-    """Strict validation helper: checks pattern match and null bytes"""
     return re.match(pattern, value) and "\x00" not in value
 
 def check_basic_validation(value, field_name="value"):
-    """Check for empty value and null bytes - returns (False, error_message) if invalid, None if valid"""
     if not value:
         return False, f"{field_name} cannot be empty"
     if "\x00" in value:
         return False, "Invalid characters detected"
     return None
 
-# Standalone validation functions
 def validate_username(username):
     error = check_basic_validation(username, "Username")
     if error:
@@ -199,7 +196,6 @@ def validate_target_range(min_range, max_range):
     percent_pattern = r'^(?:[0-9]|[1-9][0-9]|100)$'
     if not is_valid(min_range, percent_pattern) or not is_valid(max_range, percent_pattern):
         return False, "Range values must be valid numbers between 0-100"
-    # Compare numeric values without modifying original strings
     if int(min_range) >= int(max_range):
         return False, "Minimum range must be less than maximum range"
     return True, "Valid target range"
@@ -236,7 +232,6 @@ def create_range_pattern(min_val, max_val):
     
     return None
 
-# Constants
 CITIES = ['Rotterdam', 'Amsterdam', 'Utrecht', 'The Hague', 'Eindhoven', 'Tilburg', 'Groningen', 'Almere', 'Breda', 'Nijmegen']
 GENDERS = ['male', 'female']
 
@@ -501,19 +496,16 @@ class InputCollector:
             try:
                 value = input(prompt)
                 
-                # Check for empty input
                 error = check_basic_validation(value, field_name)
                 if error:
                     print(f"{error[1]}. Please try again.")
                     continue
                 
-                # Validate numeric format with regex
                 numeric_pattern = r'^-?(?:\d+\.?\d*|\.\d+)$'
                 if not is_valid(value, numeric_pattern):
                     print(f"Invalid number format. Please enter a valid number for {field_name}.")
                     continue
                 
-                # Validate range with regex pattern (string-based, no conversion)
                 if min_val is not None or max_val is not None:
                     range_pattern = create_range_pattern(min_val, max_val)
                     if range_pattern and not is_valid(value, range_pattern):
@@ -525,7 +517,6 @@ class InputCollector:
                             print(f"{field_name} must be at most {max_val}")
                         continue
                 
-                # Return string value - NO TYPE CONVERSION
                 return value
                 
             except KeyboardInterrupt:
@@ -581,17 +572,13 @@ class InputCollector:
                         print(f"Please enter a number between 1 and {max_choice}.")
                         continue
                 
-                # Convert only for return (input string not modified)
                 return int(choice)
             except ValueError:
                 print("Please enter a valid number.")
 
 
 collector = InputCollector()
-
-# Compatibility functions for existing code that uses validator.validate_pattern()
 def validate_pattern(value, pattern_type, field_name):
-    """Compatibility wrapper for existing code"""
     validators = {
         'username': validate_username,
         'password': validate_password,
@@ -613,7 +600,6 @@ def validate_pattern(value, pattern_type, field_name):
     return validators[pattern_type](value)
 
 def validate_numeric_range(value, range_type, field_name):
-    """Compatibility wrapper for existing code"""
     validators = {
         'top_speed': validate_top_speed,
         'battery_capacity': validate_battery_capacity,
@@ -626,7 +612,6 @@ def validate_numeric_range(value, range_type, field_name):
     
     return validators[range_type](value)
 
-# Create a simple validator object for backward compatibility
 class ValidatorCompat:
     def validate_pattern(self, value, pattern_type, field_name):
         return validate_pattern(value, pattern_type, field_name)

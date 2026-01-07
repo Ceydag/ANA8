@@ -6,7 +6,6 @@ from system_logging import log_action
 from session_management import get_current_user_id
 
 def count_users_by_role(target_role):
-    """Count users with a specific role (handles encrypted roles)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -477,7 +476,6 @@ def reset_user_password(user_id, current_user):
         
         from authentication import hash_password
         hashed_temp_password = hash_password(temp_password)
-        # password_hash is already a bcrypt hash, don't encrypt it
         encrypted_temp_password = encrypt_data("1")
         
         cursor.execute('''
@@ -534,7 +532,6 @@ def update_user_password(username, new_password_hash, current_user):
             print(f"User not found.")
             return False
         
-        # password_hash is already a bcrypt hash, don't encrypt it
         encrypted_temp_password = encrypt_data("0")
         
         cursor.execute('''

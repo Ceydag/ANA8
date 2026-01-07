@@ -81,11 +81,8 @@ def get_session_by_id(session_id):
     return sessions.get(session_id)
 
 def get_any_active_session():
-    """Get any active session - useful when username is unknown"""
     for session in sessions.values():
-        # Check if value is a Session object (not a string)
         if isinstance(session, Session):
-            # Check if session is not expired
             is_expired, _ = session.is_expired()
             if not is_expired:
                 return session
@@ -159,17 +156,13 @@ def display_session_info(username):
 
 
 def handle_suspicious_activity(username, activity_description):
-    # Try to find session by username first
     session = get_session_by_username(username)
     
-    # If username is "unknown" or session not found, try to get any active session
     if not session or username == "unknown":
         session = get_any_active_session()
         if not session:
             return False, "No active session"
     
-    # Use session username (which is always decrypted) instead of the parameter
-    # This ensures we log the correct decrypted username, not "unknown" or encrypted values
     log_action(session.username, "Suspicious activity detected", activity_description, suspicious=True)
     
     should_terminate, message = session.add_suspicious_activity()
@@ -193,7 +186,6 @@ def update_session_username(old_username, new_username):
 
 
 def user_exists_in_database(username):
-    """Check if user account exists in database - returns True if exists, False otherwise"""
     try:
         from database import get_connection, close_connection
         from encryption import decrypt_data

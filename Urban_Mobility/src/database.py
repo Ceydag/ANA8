@@ -79,7 +79,6 @@ def initialize_db():
     from encryption import encrypt_data
     from datetime import datetime
     
-    # Check if super_admin exists (check both encrypted and unencrypted)
     cursor.execute('SELECT username FROM Users')
     all_usernames = cursor.fetchall()
     admin_already_exists = False
