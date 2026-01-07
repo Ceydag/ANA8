@@ -159,13 +159,32 @@ def restore_backup(restore_code, username):
             print(f"Backup file not found: {decrypted_backup_filename}")
             return False
         
+        current_user_exists = False
+        
         with zipfile.ZipFile(decrypted_backup_filename, 'r') as backup_zip:
             backup_zip.extractall('.')
+        
+        close_connection(conn)  
+        conn = get_connection()  
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT username, role FROM Users')
+        restored_users = cursor.fetchall()
+        
+        for encrypted_user, role in restored_users:
+            try:
+                decrypted_user = decrypt_data(encrypted_user)
+                if decrypted_user.lower() == username.lower():
+                    current_user_exists = True
+                    break
+            except:
+                if encrypted_user.lower() == username.lower():
+                    current_user_exists = True
+                    break
         
         from encryption import encrypt_data
         encrypted_used = encrypt_data("1")
         
-        # Find the code again to update it
         cursor.execute('SELECT code FROM RestoreCodes WHERE system_admin_username = ?', (encrypted_username,))
         all_codes = cursor.fetchall()
         matching_code = None
@@ -191,11 +210,16 @@ def restore_backup(restore_code, username):
         close_connection(conn)
         
         print(f"Database restored successfully from {decrypted_backup_filename}")
-        return True
+        
+        return {
+            'success': True,
+            'user_exists_in_restored_db': current_user_exists,
+            'username': username
+        }
         
     except Exception as e:
         print(f"Error restoring backup: {e}")
-        return False
+        return {'success': False, 'error': str(e)}
 
 def list_backups():
     backup_files = []

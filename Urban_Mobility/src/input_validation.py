@@ -150,17 +150,27 @@ def validate_mileage(mileage):
         return True, "Valid mileage"
     return False, "Invalid mileage format"
 
+from datetime import datetime
+
 def validate_date(value):
     error = check_basic_validation(value, "Date")
     if error:
         return error
+    
     pattern = r"^\d{4}-\d{2}-\d{2}$"
     if not is_valid(value, pattern):
-        return False, "Invalid date format"
-    current_date_str = datetime.now().strftime('%Y-%m-%d')
-    if value <= current_date_str:
+        return False, "Invalid date format. Must be YYYY-MM-DD"
+    
+    try:
+        date_obj = datetime.strptime(value, '%Y-%m-%d').date()
+        current_date = datetime.now().date()
+        if date_obj.year < 1930:
+            return False, "Date must be 1930 or later"
+        if date_obj > current_date:
+            return False, "Date cannot be in the future"
         return True, "Valid date"
-    return False, "Date cannot be in the future"
+    except ValueError:
+        return False, "Invalid date"
 
 def validate_coordinates(latitude, longitude):
     if not latitude or not longitude:
@@ -341,9 +351,9 @@ class InputCollector:
 
     def get_driving_license(self):
         return self.get_validated_input(
-            "Enter driving license (XXDDDDDDD or XDDDDDDDD format): ",
+            "Enter driving license (DDXXXXXXX or DXXXXXXXX format): ",
             validate_driving_license,
-            "Driving license must be in format XXDDDDDDD or XDDDDDDDD (2-3 letters followed by 7-8 digits)."
+            "Driving license must be in format DDXXXXXXX or DXXXXXXXX (2-3 letters followed by 7-8 digits)."
         )
 
     def get_birthday(self):

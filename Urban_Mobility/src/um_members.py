@@ -165,7 +165,9 @@ def system_admin_menu(username):
         elif choice == 8:
             create_backup()
         elif choice == 9:
-            restore_backup_menu(username)
+            result = restore_backup_menu(username)
+            if result == "force_logout":
+                return "logout"
         elif choice == 10:
             list_users(username)
         elif choice == 11:
@@ -1952,7 +1954,44 @@ def restore_backup_menu(username):
     if not code:
         print("Restore code cannot be empty")
         return
-    restore_backup(code, username)
+    
+    print("\n" + "=" * 60)
+    print("    RESTORE BACKUP")
+    print("=" * 60)
+    print("WARNING: This will overwrite the current database!")
+    print("Make sure you have a current backup before proceeding.")
+    print()
+    
+    confirm = input("Are you sure you want to restore from backup? (y/n): ")
+    if confirm.lower() != 'y':
+        print("Restore cancelled.")
+        return
+    
+    result = restore_backup(code, username)
+    
+    if isinstance(result, dict):
+        if result.get('success'):
+            if not result.get('user_exists_in_restored_db', False):
+                print(f"\n{'!' * 60}")
+                print("  WARNING: Your account does not exist in the restored database!")
+                print("  You will be logged out automatically.")
+                print(f"{'!' * 60}")
+                
+                from authentication import logout_user
+                if logout_user(username):
+                    print("\nYou have been logged out successfully.")
+                    return "force_logout"
+            else:
+                print("\n✅ Database restored successfully!")
+                print("✅ Your account exists in the restored database.")
+                print("✅ You remain logged in.")
+        else:
+            print(f"\n❌ Restore failed: {result.get('error', 'Unknown error')}")
+    else:
+        if result:
+            print("\n✅ Database restored successfully!")
+        else:
+            print("\n❌ Restore failed.")
 
 if __name__ == "__main__":
     main()
