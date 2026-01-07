@@ -346,9 +346,9 @@ class InputCollector:
 
     def get_driving_license(self):
         return self.get_validated_input(
-            "Enter driving license (DDXXXXXXX or DXXXXXXXX format): ",
+            "Enter driving license (XXDDDDDDD or XDDDDDDDD format): ",
             validate_driving_license,
-            "Driving license must be in format DDXXXXXXX or DXXXXXXXX (2-3 letters followed by 7-8 digits)."
+            "Driving license must be in format XXDDDDDDD or XDDDDDDDD (2-3 letters followed by 7-8 digits)."
         )
 
     def get_birthday(self):
