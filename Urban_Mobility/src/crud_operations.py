@@ -168,7 +168,6 @@ def list_system_admins(current_user):
         
         if not users:
             print("No System Administrators found in the system.")
-            print("Note: Super Admin account is protected and not shown in this list.")
             return
         
         print("\n" + "=" * 90)
@@ -581,7 +580,7 @@ def check_temp_password(username):
 
 
 
-def create_traveller(traveller_data):
+def create_traveller(traveller_data, current_user):
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -622,6 +621,8 @@ def create_traveller(traveller_data):
         
         conn.commit()
         close_connection(conn)
+        
+        log_action(current_user, f"Created new traveller: {traveller_data['first_name']} {traveller_data['last_name']}")
         return True
         
     except Exception as e:
@@ -832,7 +833,7 @@ def search_travellers(search_term):
     except Exception as e:
         print(f"Error searching travellers: {e}")
 
-def update_traveller(traveller_id, update_data):
+def update_traveller(traveller_id, update_data, current_user):
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -867,6 +868,8 @@ def update_traveller(traveller_id, update_data):
         if cursor.rowcount > 0:
             conn.commit()
             close_connection(conn)
+            updated_fields = ', '.join([f for f in update_data.keys() if f not in ['birthday', 'gender', 'registration_date']])
+            log_action(current_user, f"Updated traveller ID {traveller_id}: {updated_fields}")
             return True
         else:
             close_connection(conn)
@@ -876,7 +879,7 @@ def update_traveller(traveller_id, update_data):
         print(f"Error updating traveller: {e}")
         return False
 
-def delete_traveller(traveller_id):
+def delete_traveller(traveller_id, current_user):
     conn = None
     try:
         conn = get_connection()
@@ -896,6 +899,7 @@ def delete_traveller(traveller_id):
         if cursor.rowcount > 0:
             conn.commit()
             print(f"Traveller with ID '{traveller_id}' deleted successfully")
+            log_action(current_user, f"Deleted traveller ID {traveller_id}")
             return True
         else:
             print(f"No traveller found with ID '{traveller_id}'")
@@ -919,7 +923,7 @@ def delete_traveller(traveller_id):
         if conn:
             close_connection(conn)
 
-def create_scooter(scooter_data):
+def create_scooter(scooter_data, current_user):
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -965,6 +969,8 @@ def create_scooter(scooter_data):
         
         conn.commit()
         close_connection(conn)
+        
+        log_action(current_user, f"Created new scooter: {scooter_data['brand']} {scooter_data['model']} (Serial: {scooter_data['serial_number']})")
         return True
         
     except Exception as e:
@@ -1150,7 +1156,7 @@ def search_scooters(search_term):
     except Exception as e:
         print(f"Error searching scooters: {e}")
 
-def update_scooter(scooter_id, update_data):
+def update_scooter(scooter_id, update_data, current_user):
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -1181,6 +1187,8 @@ def update_scooter(scooter_id, update_data):
         if cursor.rowcount > 0:
             conn.commit()
             close_connection(conn)
+            updated_fields = ', '.join(update_data.keys())
+            log_action(current_user, f"Updated scooter ID {scooter_id}: {updated_fields}")
             return True
         else:
             close_connection(conn)
@@ -1190,7 +1198,7 @@ def update_scooter(scooter_id, update_data):
         print(f"Error updating scooter: {e}")
         return False
 
-def delete_scooter(scooter_id):
+def delete_scooter(scooter_id, current_user):
     conn = None
     try:
         conn = get_connection()
@@ -1210,6 +1218,7 @@ def delete_scooter(scooter_id):
         if cursor.rowcount > 0:
             conn.commit()
             print(f"Scooter with ID '{scooter_id}' deleted successfully")
+            log_action(current_user, f"Deleted scooter ID {scooter_id}")
             return True
         else:
             print(f"No scooter found with ID '{scooter_id}'")

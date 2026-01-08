@@ -34,7 +34,7 @@ def validate_name(name):
     error = check_basic_validation(name, "Name")
     if error:
         return error
-    pattern = r"^[a-zA-Z]{2,20}$"
+    pattern = r"^[a-zA-Z]{2}$|^[a-zA-Z]([a-zA-Z'-]){1,18}[a-zA-Z]$"
     if is_valid(name, pattern):
         return True, "Valid name"
     return False, "Invalid name format"
@@ -154,20 +154,28 @@ def validate_date(value):
     if error:
         return error
     
-    pattern = r"^\d{4}-\d{2}-\d{2}$"
-    if not is_valid(value, pattern):
+    pattern = r"^(\d{4})-(\d{2})-(\d{2})$"
+    match = re.match(pattern, value)
+    if not match:
         return False, "Invalid date format. Must be YYYY-MM-DD"
+    year_str, month_str, day_str = match.groups()
+    current_date_str = datetime.now().strftime('%Y-%m-%d')
+    current_year_str = current_date_str[:4]
+    if year_str < "1930":
+        return False, "Date must be 1930 or later"
     
-    try:
-        date_obj = datetime.strptime(value, '%Y-%m-%d').date()
-        current_date = datetime.now().date()
-        if date_obj.year < 1930:
-            return False, "Date must be 1930 or later"
-        if date_obj > current_date:
-            return False, "Date cannot be in the future"
-        return True, "Valid date"
-    except ValueError:
-        return False, "Invalid date"
+    if value > current_date_str:
+        return False, "Date cannot be in the future"
+    if month_str < "01" or month_str > "12":
+        return False, "Invalid month. Must be between 01-12"
+    if day_str < "01" or day_str > "31":
+        return False, "Invalid day. Must be between 01-31"
+    if month_str in ["04", "06", "09", "11"] and day_str > "30":
+        return False, "Invalid date. This month has only 30 days"
+    if month_str == "02" and day_str > "29":
+        return False, "Invalid date. February has maximum 29 days"
+    
+    return True, "Valid date"
 
 def validate_coordinates(latitude, longitude):
     if not latitude or not longitude:
@@ -184,6 +192,18 @@ def validate_coordinates(latitude, longitude):
         return False, "Coordinates must be within Rotterdam region and have valid format"
     return True, "Valid coordinates"
 
+def _compare_numeric_strings(str1, str2):
+    max_len = max(len(str1), len(str2))
+    str1_padded = str1.zfill(max_len)
+    str2_padded = str2.zfill(max_len)
+    
+    if str1_padded < str2_padded:
+        return -1
+    elif str1_padded == str2_padded:
+        return 0
+    else:
+        return 1
+
 def validate_target_range(min_range, max_range):
     if not min_range or not max_range:
         return False, "Range values cannot be empty"
@@ -196,7 +216,10 @@ def validate_target_range(min_range, max_range):
     percent_pattern = r'^(?:[0-9]|[1-9][0-9]|100)$'
     if not is_valid(min_range, percent_pattern) or not is_valid(max_range, percent_pattern):
         return False, "Range values must be valid numbers between 0-100"
-    if int(min_range) >= int(max_range):
+    
+    # Compare using string comparison instead of parsing
+    comparison = _compare_numeric_strings(min_range, max_range)
+    if comparison >= 0:  # min_range >= max_range
         return False, "Minimum range must be less than maximum range"
     return True, "Valid target range"
 
@@ -277,7 +300,7 @@ class InputCollector:
         return self.get_validated_input(
             "Enter first name: ",
             validate_name,
-            "First name must be 2-20 characters with letters only",
+            "First name must be 2-20 characters, start and end with a letter, and may contain apostrophes (') and hyphens (-)",
             username=username,
             field_name=field_name
         )
@@ -286,7 +309,7 @@ class InputCollector:
         return self.get_validated_input(
             "Enter last name: ",
             validate_name,
-            "Last name must be 2-20 characters with letters only",
+            "Last name must be 2-20 characters, start and end with a letter, and may contain apostrophes (') and hyphens (-)",
             username=username,
             field_name=field_name
         )
@@ -432,13 +455,16 @@ class InputCollector:
     def get_coordinates(self, username="unknown", field_name="coordinates"):
         print("Enter GPS coordinates for Rotterdam region:")
         
-        while True:
+        attempts = 0
+        max_attempts = 3
+        while attempts < max_attempts:
             try:
                 lat_input = input("Enter latitude (e.g., 51.9225): ")
                 lon_input = input("Enter longitude (e.g., 4.47917): ")
                 
                 if not lat_input or not lon_input:
                     print("Coordinates cannot be empty. Please try again.")
+                    attempts += 1
                     continue
                 
                 from system_logging import detect_suspicious_input
@@ -455,21 +481,32 @@ class InputCollector:
                     return float(lat_input), float(lon_input)
                 else:
                     print(f"{message}")
-                    print("Coordinates must be within Rotterdam region with maximum 5 decimal places.")
+                    attempts += 1
+                    if attempts < max_attempts:
+                        print("Coordinates must be within Rotterdam region with maximum 5 decimal places.")
             except ValueError:
                 print("Invalid number format. Please enter valid decimal numbers.")
+                attempts += 1
             except KeyboardInterrupt:
                 print("\nInput cancelled.")
                 return None, None
+        
+        print(f"Maximum attempts ({max_attempts}) exceeded. Skipping coordinates input.")
+        from system_logging import log_suspicious_activity
+        log_suspicious_activity(username, f"Exceeded max attempts ({max_attempts}) for coordinates input", f"Field: {field_name}")
+        return None, None
 
     def get_target_range(self, username="unknown", field_name="target_range"):
-        while True:
+        attempts = 0
+        max_attempts = 3
+        while attempts < max_attempts:
             try:
                 min_range = input("Enter minimum target range (0-100%): ")
                 max_range = input("Enter maximum target range (0-100%): ")
                 
                 if not min_range or not max_range:
                     print("Both values are required. Please try again.")
+                    attempts += 1
                     continue
                 
                 from system_logging import detect_suspicious_input
@@ -486,10 +523,17 @@ class InputCollector:
                     return float(min_range), float(max_range)
                 else:
                     print(f"{message}")
-                    print("Minimum must be less than maximum, both between 0-100%.")
+                    attempts += 1
+                    if attempts < max_attempts:
+                        print("Minimum must be less than maximum, both between 0-100%.")
             except KeyboardInterrupt:
                 print("\nInput cancelled.")
                 return None, None
+        
+        print(f"Maximum attempts ({max_attempts}) exceeded. Skipping target range input.")
+        from system_logging import log_suspicious_activity
+        log_suspicious_activity(username, f"Exceeded max attempts ({max_attempts}) for target_range input", f"Field: {field_name}")
+        return None, None
 
     def get_numeric_input(self, prompt, min_val=None, max_val=None, field_name="value"):
         while True:
@@ -543,38 +587,44 @@ class InputCollector:
                 print("Please enter 'y' for yes or 'n' for no.")
 
     def get_menu_choice(self, prompt, max_choice, username="unknown", field_name="menu_choice"):
-        while True:
-            try:
-                choice = input(prompt)
-                if not choice:
-                    print("Please enter a choice.")
-                    continue
-                
-                from system_logging import detect_suspicious_input
-                if detect_suspicious_input(choice, field_name):
-                    from session_management import handle_suspicious_activity
-                    terminate_session, termination_message = handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {choice}")
-                    print("Bad input. Incident logged.")
-                    import sys
-                    sys.exit(0)
-                
-                choice_pattern = create_range_pattern(1, max_choice)
-                if choice_pattern:
-                    if not is_valid(choice, choice_pattern):
-                        print(f"Please enter a number between 1 and {max_choice}.")
-                        continue
-                else:
-                    numeric_pattern = r'^\d+$'
-                    if not is_valid(choice, numeric_pattern):
-                        print("Please enter a valid number.")
-                        continue
-                    if not (1 <= int(choice) <= max_choice):
-                        print(f"Please enter a number between 1 and {max_choice}.")
-                        continue
-                
-                return int(choice)
-            except ValueError:
+        attempts = 0
+        max_attempts = 3
+        while attempts < max_attempts:
+            choice = input(prompt)
+
+            if not choice:
+                print("Please enter a choice.")
+                attempts += 1
+                continue
+
+            from system_logging import detect_suspicious_input
+            if detect_suspicious_input(choice, field_name):
+                from session_management import handle_suspicious_activity
+                handle_suspicious_activity(username, f"Suspicious input detected in {field_name}: {choice}")
+                print("Bad input. Incident logged.")
+                import sys
+                sys.exit(0)
+
+            if not re.fullmatch(r"\d+", choice):
                 print("Please enter a valid number.")
+                attempts += 1
+                continue
+
+            choice_int = int(choice)
+
+            if not (1 <= choice_int <= max_choice):
+                print(f"Please enter a number between 1 and {max_choice}.")
+                attempts += 1
+                continue
+
+            return choice_int
+        
+        print(f"Maximum attempts ({max_attempts}) exceeded. Exiting menu.")
+        from system_logging import log_suspicious_activity
+        log_suspicious_activity(username, f"Exceeded max attempts ({max_attempts}) for menu choice input", f"Field: {field_name}")
+        return None
+
+
 
 
 collector = InputCollector()

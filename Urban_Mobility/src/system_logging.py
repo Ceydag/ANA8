@@ -109,6 +109,8 @@ def get_unread_suspicious_count(username=None):
         else:
             read_status_file = 'read_status/suspicious_read_status.json'
         
+        os.makedirs('read_status', exist_ok=True)
+        
         read_logs = set()
         
         if os.path.exists(read_status_file):
@@ -136,6 +138,9 @@ def mark_current_suspicious_as_read(username=None):
             read_status_file = f'read_status/suspicious_read_status_{username}.json'
         else:
             read_status_file = 'read_status/suspicious_read_status.json'
+        
+        # Create directory if it doesn't exist
+        os.makedirs('read_status', exist_ok=True)
         
         suspicious_logs = get_suspicious_logs()
         

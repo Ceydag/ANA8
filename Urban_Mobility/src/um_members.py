@@ -8,12 +8,12 @@ from backup import create_backup, generate_restore_code, restore_backup, list_ba
 from crud_operations import *
 from input_validation import collector, validator
 
-def get_validated_id(prompt, entity_name):
+def get_validated_id(prompt, entity_name, username="unknown"):
     return collector.get_validated_input(
         prompt,
         lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
         f"Invalid {entity_name.lower()} ID. Must be a number.",
-        username="unknown",
+        username=username,
         field_name=f"{entity_name.lower()}_id"
     )
 
@@ -87,10 +87,15 @@ def super_admin_menu(username):
         print("8.  Revoke Restore Code")
         print("9.  List Restore Codes")
         print("10. View All Users")
-        print("11. Logout")
+        print("11. Restore Backup")
+        print("12. Logout")
         print("-" * 50)
         
-        choice = collector.get_menu_choice("Enter your choice (1-11): ", 11, username=username)
+        choice = collector.get_menu_choice("Enter your choice (1-12): ", 12, username=username)
+        
+        if choice is None:
+            print("Menu input cancelled due to max attempts exceeded.")
+            continue
         
         if choice == 1:
             manage_system_admins(username)
@@ -113,6 +118,10 @@ def super_admin_menu(username):
         elif choice == 10:
             list_users(username)
         elif choice == 11:
+            result = restore_backup_direct_menu(username)
+            if result == "force_logout":
+                return "logout"
+        elif choice == 12:
             if logout_user(username):
                 print("Successfully logged out.")
                 return "logout"
@@ -147,6 +156,10 @@ def system_admin_menu(username):
         print("-" * 50)
         
         choice = collector.get_menu_choice("Enter your choice (1-11): ", 11, username=username)
+        
+        if choice is None:
+            print("Menu input cancelled due to max attempts exceeded.")
+            continue
         
         if choice == 1:
             change_password(username)
@@ -200,6 +213,10 @@ def service_engineer_menu(username):
         
         choice = collector.get_menu_choice("Enter your choice (1-4): ", 4, username=username)
         
+        if choice is None:
+            print("Menu input cancelled due to max attempts exceeded.")
+            continue
+        
         if choice == 1:
             change_password(username)
         elif choice == 2:
@@ -247,7 +264,6 @@ def update_system_admin_menu(current_user):
     print("    UPDATE SYSTEM ADMINISTRATOR")
     print("=" * 60)
     print("WARNING: This will update user information!")
-    print("NOTE: Super Admin account (ID 1) is protected and cannot be updated!")
     print()
     
     from crud_operations import count_users_by_role
@@ -261,7 +277,7 @@ def update_system_admin_menu(current_user):
     list_system_admins(current_user)
     
     print("\nEnter the ID of the System Administrator to update:")
-    user_id = get_validated_id("User ID: ", "User")
+    user_id = get_validated_id("User ID: ", "User", username=current_user)
     if not user_id:
         print("User ID is required.")
         return
@@ -465,7 +481,7 @@ def update_service_engineer_menu(current_user):
     list_service_engineers(current_user)
     
     print("\nEnter the ID of the Service Engineer to update:")
-    user_id = get_validated_id("User ID: ", "User")
+    user_id = get_validated_id("User ID: ", "User", username=current_user)
     if not user_id:
         print("User ID is required.")
         return
@@ -549,7 +565,7 @@ def manage_travellers(username):
         elif choice == 3:
             update_traveller_menu(username)
         elif choice == 4:
-            delete_traveller_menu()
+            delete_traveller_menu(username)
         elif choice == 5:
             break
         else:
@@ -573,7 +589,7 @@ def manage_scooters(username):
         elif choice == 3:
             update_scooter_menu(username)
         elif choice == 4:
-            delete_scooter_menu()
+            delete_scooter_menu(username)
         elif choice == 5:
             break
         else:
@@ -671,7 +687,7 @@ def add_traveller_menu(current_user):
         return
     
     print("\nCreating traveller...")
-    if create_traveller(traveller_data):
+    if create_traveller(traveller_data, current_user):
         print("Traveller added successfully!")
     else:
         print("Failed to add traveller. Please check your input.")
@@ -699,7 +715,7 @@ def update_traveller_menu(current_user):
     list_travellers()
     
     print("\nEnter the ID of the Traveller to update:")
-    traveller_id = get_validated_id("Traveller ID: ", "Traveller")
+    traveller_id = get_validated_id("Traveller ID: ", "Traveller", username=current_user)
     if not traveller_id:
         print("Traveller ID is required. Operation cancelled")
         return
@@ -732,7 +748,7 @@ def update_traveller_menu(current_user):
         new_first = collector.get_first_name(username=current_user, field_name="first_name")
         if new_first:
             update_data = {"first_name": new_first}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("First name updated successfully!")
             else:
                 print("Failed to update first name.")
@@ -744,7 +760,7 @@ def update_traveller_menu(current_user):
         new_last = collector.get_last_name(username=current_user, field_name="last_name")
         if new_last:
             update_data = {"last_name": new_last}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Last name updated successfully!")
             else:
                 print("Failed to update last name.")
@@ -756,7 +772,7 @@ def update_traveller_menu(current_user):
         new_gender = collector.get_gender()
         if new_gender:
             update_data = {"gender": new_gender}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Gender updated successfully!")
             else:
                 print("Failed to update gender.")
@@ -774,7 +790,7 @@ def update_traveller_menu(current_user):
         )
         if new_street:
             update_data = {"street_name": new_street}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Street name updated successfully!")
             else:
                 print("Failed to update street name.")
@@ -792,7 +808,7 @@ def update_traveller_menu(current_user):
         )
         if new_house:
             update_data = {"house_number": new_house}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("House number updated successfully!")
             else:
                 print("Failed to update house number.")
@@ -804,7 +820,7 @@ def update_traveller_menu(current_user):
         new_zip = collector.get_zip_code()
         if new_zip:
             update_data = {"zip_code": new_zip}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Zip code updated successfully!")
             else:
                 print("Failed to update zip code.")
@@ -816,7 +832,7 @@ def update_traveller_menu(current_user):
         new_city = collector.get_city()
         if new_city:
             update_data = {"city": new_city}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("City updated successfully!")
             else:
                 print("Failed to update city.")
@@ -828,7 +844,7 @@ def update_traveller_menu(current_user):
         new_email = collector.get_email()
         if new_email:
             update_data = {"email": new_email}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Email updated successfully!")
             else:
                 print("Failed to update email.")
@@ -840,7 +856,7 @@ def update_traveller_menu(current_user):
         new_phone = collector.get_phone()
         if new_phone:
             update_data = {"mobile_phone": new_phone}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Phone number updated successfully!")
             else:
                 print("Failed to update phone number.")
@@ -852,7 +868,7 @@ def update_traveller_menu(current_user):
         new_license = collector.get_driving_license()
         if new_license:
             update_data = {"driving_license": new_license}
-            if update_traveller(traveller_id, update_data):
+            if update_traveller(traveller_id, update_data, current_user):
                 print("Driving license updated successfully!")
             else:
                 print("Failed to update driving license.")
@@ -937,7 +953,7 @@ def add_scooter_menu(current_user="unknown"):
         return
     
     print("\n Creating scooter...")
-    if create_scooter(scooter_data):
+    if create_scooter(scooter_data, current_user):
         print("Scooter added successfully!")
     else:
         print("Failed to add scooter. Please check your input.")
@@ -981,7 +997,7 @@ def update_scooter_menu_service_engineer(username="unknown"):
     close_connection(conn)
     
     if count == 0:
-        print("📋 No scooters found in the system.")
+        print("No scooters found in the system.")
         print("   Cannot update scooters when none exist.")
         return
     
@@ -1029,7 +1045,7 @@ def update_scooter_menu_service_engineer(username="unknown"):
         new_value = collector.get_state_of_charge()
         if new_value is not None:
             update_data = {"state_of_charge": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("State of charge updated successfully!")
             else:
                 print("Failed to update state of charge.")
@@ -1041,7 +1057,7 @@ def update_scooter_menu_service_engineer(username="unknown"):
         lat, lon = collector.get_coordinates(username=username, field_name="coordinates")
         if lat is not None and lon is not None:
             update_data = {"latitude": lat, "longitude": lon}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Location updated successfully!")
             else:
                 print("Failed to update location.")
@@ -1052,7 +1068,7 @@ def update_scooter_menu_service_engineer(username="unknown"):
         print("\n Update Out of Service Status:")
         new_value = collector.get_boolean_input("Is the scooter out of service?", username=username, field_name="out_of_service")
         update_data = {"out_of_service": new_value}
-        if update_scooter(int(scooter_id), update_data):
+        if update_scooter(int(scooter_id), update_data, username):
             status = "out of service" if new_value else "in service"
             print(f"Scooter status updated to {status}!")
         else:
@@ -1063,7 +1079,7 @@ def update_scooter_menu_service_engineer(username="unknown"):
         new_value = collector.get_mileage()
         if new_value is not None:
             update_data = {"mileage": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Mileage updated successfully!")
             else:
                 print("Failed to update mileage.")
@@ -1075,7 +1091,7 @@ def update_scooter_menu_service_engineer(username="unknown"):
         new_value = collector.get_maintenance_date()
         if new_value:
             update_data = {"last_maintenance_date": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Last maintenance date updated successfully!")
             else:
                 print("Failed to update maintenance date.")
@@ -1161,7 +1177,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_brand()
         if new_value:
             update_data = {"brand": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Brand updated successfully!")
             else:
                 print("Failed to update brand.")
@@ -1173,7 +1189,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_model()
         if new_value:
             update_data = {"model": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Model updated successfully!")
             else:
                 print("Failed to update model.")
@@ -1185,7 +1201,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_serial_number()
         if new_value:
             update_data = {"serial_number": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Serial number updated successfully!")
             else:
                 print("Failed to update serial number.")
@@ -1197,7 +1213,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_top_speed()
         if new_value is not None:
             update_data = {"top_speed": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Top speed updated successfully!")
             else:
                 print("Failed to update top speed.")
@@ -1209,7 +1225,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_battery_capacity()
         if new_value is not None:
             update_data = {"battery_capacity": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Battery capacity updated successfully!")
             else:
                 print("Failed to update battery capacity.")
@@ -1221,7 +1237,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_state_of_charge()
         if new_value is not None:
             update_data = {"state_of_charge": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("State of charge updated successfully!")
             else:
                 print("Failed to update state of charge.")
@@ -1233,7 +1249,7 @@ def update_scooter_menu(username="unknown"):
         min_range, max_range = collector.get_target_range(username=username, field_name="target_range")
         if min_range is not None and max_range is not None:
             update_data = {"target_range_min": min_range, "target_range_max": max_range}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Target range updated successfully!")
             else:
                 print("Failed to update target range.")
@@ -1245,7 +1261,7 @@ def update_scooter_menu(username="unknown"):
         lat, lon = collector.get_coordinates(username=username, field_name="coordinates")
         if lat is not None and lon is not None:
             update_data = {"latitude": lat, "longitude": lon}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Location updated successfully!")
             else:
                 print("Failed to update location.")
@@ -1256,7 +1272,7 @@ def update_scooter_menu(username="unknown"):
         print("\n Update Out of Service Status:")
         new_value = collector.get_boolean_input("Is the scooter out of service?", username=username, field_name="out_of_service")
         update_data = {"out_of_service": new_value}
-        if update_scooter(int(scooter_id), update_data):
+        if update_scooter(int(scooter_id), update_data, username):
             status = "out of service" if new_value else "in service"
             print(f"Scooter status updated to {status}!")
         else:
@@ -1267,7 +1283,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_mileage()
         if new_value is not None:
             update_data = {"mileage": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Mileage updated successfully!")
             else:
                 print("Failed to update mileage.")
@@ -1279,7 +1295,7 @@ def update_scooter_menu(username="unknown"):
         new_value = collector.get_maintenance_date()
         if new_value:
             update_data = {"last_maintenance_date": new_value}
-            if update_scooter(int(scooter_id), update_data):
+            if update_scooter(int(scooter_id), update_data, username):
                 print("Last maintenance date updated successfully!")
             else:
                 print("Failed to update maintenance date.")
@@ -1293,7 +1309,7 @@ def update_scooter_menu(username="unknown"):
     else:
         print("Invalid field selection. Please choose 1-12.")
 
-def delete_traveller_menu():
+def delete_traveller_menu(current_user):
     from crud_operations import list_travellers
     from database import get_connection, close_connection
     
@@ -1317,7 +1333,7 @@ def delete_traveller_menu():
     list_travellers()
     
     print("\nEnter the ID of the Traveller to delete:")
-    traveller_id = get_validated_id("Traveller ID: ", "Traveller")
+    traveller_id = get_validated_id("Traveller ID: ", "Traveller", username=current_user)
     if not traveller_id:
         print("Traveller ID is required. Operation cancelled")
         return
@@ -1330,11 +1346,11 @@ def delete_traveller_menu():
     
     confirm = input(f"Are you sure you want to delete traveller {traveller_id}? (y/n): ")
     if confirm.lower() == 'y':
-        delete_traveller(traveller_id)
+        delete_traveller(traveller_id, current_user)
     else:
         print("Deletion cancelled.")
 
-def delete_scooter_menu():
+def delete_scooter_menu(current_user):
     from crud_operations import list_scooters
     from database import get_connection, close_connection
     
@@ -1362,7 +1378,7 @@ def delete_scooter_menu():
         "Scooter ID: ",
         lambda x: (x.isdigit(), "Must be a number") if x.isdigit() else (False, "Must be a number"),
         "Invalid scooter ID. Must be a number.",
-        username="unknown",
+        username=current_user,
         field_name="scooter_id"
     )
     if not scooter_id:
@@ -1382,7 +1398,7 @@ def delete_scooter_menu():
     
     confirm = input(f"Are you sure you want to delete scooter {scooter_id}? (y/n): ")
     if confirm.lower() == 'y':
-        delete_scooter(int(scooter_id))
+        delete_scooter(int(scooter_id), current_user)
     else:
         print("Deletion cancelled.")
 
@@ -1982,8 +1998,90 @@ def restore_backup_menu(username):
                     print("\nYou have been logged out successfully.")
                     return "force_logout"
             else:
+                print("\nDatabase restored successfully!")
+                print("Your account exists in the restored database.")
+                print("You remain logged in.")
+        else:
+            print(f"\nRestore failed: {result.get('error', 'Unknown error')}")
+    else:
+            if result:
+                print("Database restored successfully!")
+            else:
+                print("Restore failed.")
+
+def restore_backup_direct_menu(username):
+    """
+    Menu function for Super Admin to restore backups directly without a code.
+    """
+    from backup import list_backups, restore_backup_direct
+    
+    print("\n" + "=" * 60)
+    print("    RESTORE BACKUP (SUPER ADMIN)")
+    print("=" * 60)
+    print("WARNING: This will overwrite the current database!")
+    print("Make sure you have a current backup before proceeding.")
+    print("Note: Super Admin can restore any backup directly without a code.")
+    print()
+    
+    backup_files = list_backups()
+    if not backup_files:
+        print("No backup files found. Create a backup first.")
+        return
+    
+    print("Available backups:")
+    print("-" * 60)
+    for i, backup in enumerate(backup_files, 1):
+        print(f"{i}. {backup}")
+    print("-" * 60)
+    
+    backup_choice = collector.get_validated_input(
+        f"Select backup to restore (1-{len(backup_files)}): ",
+        lambda x: (x.isdigit() and 1 <= int(x) <= len(backup_files), f"Please enter a number between 1 and {len(backup_files)}") if x.isdigit() and 1 <= int(x) <= len(backup_files) else (False, f"Please enter a number between 1 and {len(backup_files)}"),
+        f"Please enter a number between 1 and {len(backup_files)}",
+        username=username,
+        field_name="backup_choice"
+    )
+    
+    if not backup_choice:
+        print("Restore cancelled.")
+        return
+    
+    if not backup_choice.isdigit() or not (1 <= int(backup_choice) <= len(backup_files)):
+        print("Invalid backup selection.")
+        return
+    
+    selected_backup = backup_files[int(backup_choice) - 1]
+    print(f"\nSelected backup: {selected_backup}")
+    
+    print("\n" + "=" * 60)
+    print("    CONFIRM RESTORE")
+    print("=" * 60)
+    print(f"WARNING: This will restore from: {selected_backup}")
+    print("This will overwrite the current database!")
+    print()
+    
+    confirm = input("Are you sure you want to restore from this backup? (y/n): ")
+    if confirm.lower() != 'y':
+        print("Restore cancelled.")
+        return
+    
+    result = restore_backup_direct(selected_backup, username)
+    
+    if isinstance(result, dict):
+        if result.get('success'):
+            if not result.get('user_exists_in_restored_db', False):
+                print(f"\n{'!' * 60}")
+                print("  WARNING: Your account (super_admin) does not exist in the restored database!")
+                print("  You will be logged out automatically.")
+                print(f"{'!' * 60}")
+                
+                from authentication import logout_user
+                if logout_user(username):
+                    print("\nYou have been logged out successfully.")
+                    return "force_logout"
+            else:
                 print("\n✅ Database restored successfully!")
-                print("✅ Your account exists in the restored database.")
+                print("✅ Your account (super_admin) exists in the restored database.")
                 print("✅ You remain logged in.")
         else:
             print(f"\n❌ Restore failed: {result.get('error', 'Unknown error')}")

@@ -221,6 +221,64 @@ def restore_backup(restore_code, username):
         print(f"Error restoring backup: {e}")
         return {'success': False, 'error': str(e)}
 
+def restore_backup_direct(backup_filename, username):
+    """
+    Restore backup directly for Super Admin without requiring a code.
+    This function bypasses the code validation and restores any backup directly.
+    """
+    try:
+        if not os.path.exists(backup_filename):
+            print(f"Backup file not found: {backup_filename}")
+            return {'success': False, 'error': f'Backup file not found: {backup_filename}'}
+        
+        current_user_exists = False
+        
+        # Close current connection before extracting backup
+        conn = get_connection()
+        close_connection(conn)
+        
+        # Extract backup
+        with zipfile.ZipFile(backup_filename, 'r') as backup_zip:
+            backup_zip.extractall('.')
+        
+        # Reconnect after restore
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Check if the current user (super_admin) exists in restored database
+        cursor.execute('SELECT username, role FROM Users')
+        restored_users = cursor.fetchall()
+        
+        for encrypted_user, role in restored_users:
+            try:
+                decrypted_user = decrypt_data(encrypted_user)
+                if decrypted_user.lower() == username.lower():
+                    current_user_exists = True
+                    break
+            except:
+                if encrypted_user.lower() == username.lower():
+                    current_user_exists = True
+                    break
+        
+        # Log the action if user exists in restored database
+        if current_user_exists:
+            from system_logging import log_action
+            log_action(username, f"Restored backup directly (without code): {backup_filename}")
+        
+        close_connection(conn)
+        
+        print(f"Database restored successfully from {backup_filename}")
+        
+        return {
+            'success': True,
+            'user_exists_in_restored_db': current_user_exists,
+            'username': username
+        }
+        
+    except Exception as e:
+        print(f"Error restoring backup: {e}")
+        return {'success': False, 'error': str(e)}
+
 def list_backups():
     backup_files = []
     for file in os.listdir('.'):
